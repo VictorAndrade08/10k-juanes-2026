@@ -33,7 +33,6 @@ export default function RegistrationOptions() {
           "
         >
           <div>
-            {/* TAGLINE */}
             <p
               className="
                 text-xs tracking-[0.32em]
@@ -45,7 +44,6 @@ export default function RegistrationOptions() {
               Inscripción en línea
             </p>
 
-            {/* TÍTULO */}
             <h2
               className={`
                 mt-3
@@ -60,7 +58,6 @@ export default function RegistrationOptions() {
               en menos de 3 minutos!
             </h2>
 
-            {/* LISTA */}
             <ol
               className="
                 mt-8 space-y-3
@@ -79,7 +76,7 @@ export default function RegistrationOptions() {
           {/* CTA */}
           <div className="mt-10">
             <a
-              href="#formulario-online"
+              href="/inscripcion"
               className="
                 inline-flex items-center justify-center
                 px-10 md:px-12

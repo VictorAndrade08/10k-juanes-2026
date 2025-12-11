@@ -13,21 +13,16 @@ export default function Header() {
     <header className="sticky top-3 z-50 w-full flex justify-center px-4">
       <div
         className="
-          w-full 
-          max-w-7xl
-          mx-auto
-          bg-white
+          w-full max-w-7xl mx-auto
+          bg-white rounded-full
           shadow-[0_8px_28px_rgba(0,0,0,0.10)]
-          rounded-full
-          px-6 md:px-10
-          py-3 sm:py-4
+          px-6 md:px-10 py-3 sm:py-4
           flex items-center justify-between
           border border-[#EFEFF3]
         "
       >
         {/* IZQUIERDA */}
         <div className="flex items-center gap-3 sm:gap-4">
-          {/* LOGO SVG BLANCO */}
           <div
             className="
               w-12 h-12 sm:w-14 sm:h-14 
@@ -47,14 +42,12 @@ export default function Header() {
             />
           </div>
 
-          {/* TEXTOS */}
           <div className="leading-tight">
             <span
               className={`
                 block
                 text-[18px] sm:text-[22px] md:text-[24px]
-                uppercase
-                tracking-[0.08em]
+                uppercase tracking-[0.08em]
                 text-[#111]
                 ${bebas.className}
               `}
@@ -70,7 +63,6 @@ export default function Header() {
 
         {/* DERECHA */}
         <div className="hidden md:flex items-center gap-2 sm:gap-3">
-          {/* FECHA */}
           <span
             className="
               hidden xl:inline-flex
@@ -84,35 +76,31 @@ export default function Header() {
             6 Feb 2026 · 19h00
           </span>
 
-          {/* REGLAMENTO */}
           <a
             href="#reglamento"
             className="
               hidden lg:inline-flex
               px-4 sm:px-5 py-2 text-[11px] sm:text-[12px]
-              rounded-full border border-[#C02485] 
-              text-[#C02485] 
+              rounded-full border border-[#C02485]
+              text-[#C02485]
               uppercase tracking-[0.22em] font-semibold
-              bg-white
-              hover:bg-[#C02485]/10 
-              transition
+              bg-white hover:bg-[#C02485]/10 transition
               whitespace-nowrap
             "
           >
             Reglamento
           </a>
 
-          {/* INSCRIBIRSE */}
+          {/* 🔥 AQUI SOLO CAMBIÉ EL DESTINO DEL LINK */}
           <a
-            href="#inscripcion"
+            href="/inscripcion"
             className="
               inline-flex
               px-5 sm:px-6 py-2 text-[11px] sm:text-[12px]
-              bg-[#C02485] text-white 
+              bg-[#C02485] text-white
               rounded-full uppercase tracking-[0.22em] font-semibold
               hover:bg-[#A81D72]
-              shadow-sm
-              transition
+              shadow-sm transition
               whitespace-nowrap
             "
           >

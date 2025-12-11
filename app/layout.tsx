@@ -5,6 +5,14 @@ import "./globals.css";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 
+// ---------- Server-only (solo se ejecuta en el build/render del servidor) ----------
+import { readFileSync, existsSync } from "fs";
+import { resolve } from "path";
+import crypto from "crypto";
+
+// ==============================
+// Fuentes
+// ==============================
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -15,14 +23,76 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// ==============================
+// Manifest opcional (no rompe si no existe)
+// ==============================
+function readManifest() {
+  try {
+    const p = resolve(process.cwd(), "assets-manifest.json");
+    if (existsSync(p)) return JSON.parse(readFileSync(p, "utf8"));
+  } catch {}
+  return null;
+}
+
+// ==============================
+// Hash del contenido como fallback (para ?v=HASH)
+// ==============================
+function fileHash(absPath: string) {
+  try {
+    const buf = readFileSync(absPath);
+    return crypto.createHash("md5").update(buf).digest("hex").slice(0, 10);
+  } catch {
+    // Si el archivo no existe en build, evita romper el export
+    return String(Math.floor(Date.now() / 1000));
+  }
+}
+
+const manifest = readManifest();
+
+function cssHref(basename: string) {
+  // Si hay manifest (por ejemplo: { "style.css": "assets/css/style.abc123.css" })
+  if (manifest && manifest[basename]) return "/" + manifest[basename];
+
+  // Si no hay manifest, usamos el archivo directo con ?v=HASH
+  const abs = resolve(process.cwd(), "public/assets/css/" + basename);
+  const v = fileHash(abs);
+  return `/assets/css/${basename}?v=${v}`;
+}
+
+// Rutas finales para los CSS externos
+const styleHref = cssHref("style.css");
+const mainHref = cssHref("main.css");
+
+// ==============================
+// Metadata
+// ==============================
 export const metadata: Metadata = {
   title: "10K Ruta de los Tres Juanes 2026",
   description: "Carrera nocturna Ambato — Sitio oficial",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+// ==============================
+// Layout principal
+// ==============================
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="es">
+      <head>
+        {/* Puedes agregar más metas si quieres, pero el <title> lo maneja metadata */}
+        <meta name="theme-color" content="#0b0b12" />
+        <link rel="icon" href="/favicon.ico" />
+
+        {/* CSS con cache-busting automático */}
+        <link rel="preload" as="style" href={styleHref} />
+        <link rel="stylesheet" href={styleHref} />
+        <link rel="preload" as="style" href={mainHref} />
+        <link rel="stylesheet" href={mainHref} />
+      </head>
+
       <body
         className={`
           ${geistSans.variable}
@@ -59,12 +129,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             backgroundImage: `url("data:image/svg+xml;utf8,
               <svg xmlns='http://www.w3.org/2000/svg' width='100%' height='100%'>
                 <defs>
-                  <!-- Degradado más oscuro: casi negro-violeta -> magenta -> rosa -->
                   <linearGradient id='grad1' x1='0' y1='0' x2='1' y2='1'>
-                    <stop offset='0%' stop-color='%230A0512'/>   <!-- casi negro -->
-                    <stop offset='45%' stop-color='%231A0630'/>  <!-- violeta oscuro -->
-                    <stop offset='75%' stop-color='%23B0007A'/>  <!-- magenta oscuro -->
-                    <stop offset='100%' stop-color='%23FF4F9A'/> <!-- rosa -->
+                    <stop offset='0%' stop-color='%230A0512'/>
+                    <stop offset='45%' stop-color='%231A0630'/>
+                    <stop offset='75%' stop-color='%23B0007A'/>
+                    <stop offset='100%' stop-color='%23FF4F9A'/>
                   </linearGradient>
 
                   <filter id='noise'>

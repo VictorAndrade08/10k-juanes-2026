@@ -9,7 +9,7 @@ const bebas = Bebas_Neue({
 
 export default function Hero() {
   return (
-    <section className="w-full px-4 py-10 flex justify-center">
+    <section className="w-full px-4 pt-6 pb-10 flex justify-center">
       <div
         className="
           w-full max-w-7xl 
@@ -24,7 +24,7 @@ export default function Hero() {
           shadow-[0_18px_50px_rgba(0,0,0,0.35)]
         "
       >
-        {/* COLUMNA IZQUIERDA · VIDEO */}
+        {/* VIDEO */}
         <div className="flex items-center justify-center">
           <div
             className="
@@ -38,11 +38,8 @@ export default function Hero() {
             "
           >
             <iframe
-              className="
-                absolute inset-0 w-full h-full
-                transform origin-center scale-[1.18]
-              "
-              src="https://www.youtube.com/embed/5rbX_mvz7a8?autoplay=1&mute=1&controls=0&loop=1&playlist=5rbX_mvz7a8&modestbranding=1&showinfo=0&rel=0&start=0&end=210"
+              className="absolute inset-0 w-full h-full"
+              src="https://www.youtube.com/embed/N56oXCS3lhY?autoplay=1&mute=1&controls=1&loop=1&playlist=N56oXCS3lhY&modestbranding=1&showinfo=0&rel=0"
               title="10K Ruta de los Tres Juanes – Video"
               allow="autoplay; encrypted-media; picture-in-picture"
               allowFullScreen
@@ -50,7 +47,7 @@ export default function Hero() {
           </div>
         </div>
 
-        {/* COLUMNA DERECHA · TEXTO */}
+        {/* TEXTO */}
         <div className="flex flex-col justify-center">
           <p className="uppercase tracking-[0.32em] text-xs sm:text-sm text-white/60 font-semibold">
             Vive la magia de correr bajo las luces de Ambato
@@ -64,12 +61,8 @@ export default function Hero() {
               ${bebas.className}
             `}
           >
-            <span className="block tracking-[0.08em]">
-              10K Ruta de los
-            </span>
-            <span className="block tracking-[0.08em]">
-              Tres Juanes 2026
-            </span>
+            <span className="block tracking-[0.08em]">10K Ruta de los</span>
+            <span className="block tracking-[0.08em]">Tres Juanes 2026</span>
           </h1>
 
           <p className="mt-5 text-base sm:text-lg text-white/80 max-w-xl">
@@ -80,7 +73,7 @@ export default function Hero() {
           {/* BOTONES */}
           <div className="mt-8 flex flex-wrap gap-4">
             <a
-              href="#inscripcion"
+              href="/inscripcion"
               className="
                 inline-flex items-center justify-center
                 px-8 py-3

@@ -13,7 +13,7 @@ export default function Footer() {
       <div
         className="
           w-full 
-          max-w-7xl    /* 🔥 MISMO ANCHO QUE EL HERO */
+          max-w-7xl
           rounded-[48px]
           bg-gradient-to-br from-[#050B16] via-[#070D18] to-[#02040A]
           text-white
@@ -101,7 +101,6 @@ export default function Footer() {
             <ul className="space-y-2 text-white/75">
               <li>Vehicentro</li>
               <li>Sinotruk Ecuador</li>
-              <li>Coop OSCUS</li>
             </ul>
           </div>
 
