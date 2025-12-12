@@ -165,7 +165,7 @@ export default function RegistrationOptions() {
           {/* CTA WHATSAPP */}
           <div className="mt-10">
             <a
-              href="https://wa.me/593995040437"
+              href="https://wa.me/593995102378"
               target="_blank"
               rel="noopener noreferrer"
               className="
@@ -189,7 +189,7 @@ export default function RegistrationOptions() {
 
             <p className="mt-5 text-sm md:text-base text-white/70">
               WhatsApp oficial:{" "}
-              <span className="font-semibold">+593 99 504 0437</span>.
+              <span className="font-semibold">+593 99 510 2378</span>.
             </p>
           </div>
         </article>

@@ -10,21 +10,12 @@ export default function FloatingCTA() {
     if (typeof window === "undefined") return;
 
     const onScroll = () => {
-      const scrolled = window.scrollY > 400; // aparece después de bajar un poco
-      const formSection = document.querySelector("#inscripcion");
-
-      let hideAtForm = false;
-      if (formSection) {
-        const rect = formSection.getBoundingClientRect();
-        // se esconde cuando ya estás cerca de la sección de inscripción
-        hideAtForm = rect.top < 250;
-      }
-
-      setVisible(scrolled && !hideAtForm);
+      const scrolled = window.scrollY > 400;
+      setVisible(scrolled);
     };
 
     window.addEventListener("scroll", onScroll);
-    onScroll(); // chequeo inicial
+    onScroll();
 
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
@@ -34,8 +25,7 @@ export default function FloatingCTA() {
   return (
     <button
       onClick={() => {
-        const el = document.querySelector("#inscripcion");
-        if (el) el.scrollIntoView({ behavior: "smooth" });
+        window.location.href = "/inscripcion";
       }}
       className="
         fixed z-[9999]
@@ -53,6 +43,7 @@ export default function FloatingCTA() {
         hover:shadow-[0_0_35px_rgba(255,0,128,0.75)]
 
         animate-cta-glow
+        animate-cta-bounce
         transition-all duration-300 cursor-pointer
 
         md:w-auto

@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 export default function FloatingCTA() {
   const [visible, setVisible] = useState(false);
@@ -10,13 +11,12 @@ export default function FloatingCTA() {
     if (typeof window === "undefined") return;
 
     const onScroll = () => {
-      const scrolled = window.scrollY > 400; // aparece después de bajar un poco
+      const scrolled = window.scrollY > 400;
       const formSection = document.querySelector("#inscripcion");
 
       let hideAtForm = false;
       if (formSection) {
         const rect = formSection.getBoundingClientRect();
-        // se esconde cuando ya estás cerca de la sección de inscripción
         hideAtForm = rect.top < 250;
       }
 
@@ -24,7 +24,7 @@ export default function FloatingCTA() {
     };
 
     window.addEventListener("scroll", onScroll);
-    onScroll(); // chequeo inicial
+    onScroll();
 
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
@@ -34,8 +34,7 @@ export default function FloatingCTA() {
   return (
     <button
       onClick={() => {
-        const el = document.querySelector("#inscripcion");
-        if (el) el.scrollIntoView({ behavior: "smooth" });
+        toast.info("Próximamente — Estate atento 👀");
       }}
       className="
         fixed z-[9999]

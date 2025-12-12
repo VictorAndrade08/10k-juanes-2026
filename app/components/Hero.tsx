@@ -39,7 +39,7 @@ export default function Hero() {
           >
             <iframe
               className="absolute inset-0 w-full h-full"
-              src="https://www.youtube.com/embed/N56oXCS3lhY?autoplay=1&mute=1&controls=1&loop=1&playlist=N56oXCS3lhY&modestbranding=1&showinfo=0&rel=0"
+              src="https://www.youtube.com/embed/h5QFFj_HwIk?autoplay=1&mute=1&controls=1&loop=1&playlist=h5QFFj_HwIk&modestbranding=1&showinfo=0&rel=0"
               title="10K Ruta de los Tres Juanes – Video"
               allow="autoplay; encrypted-media; picture-in-picture"
               allowFullScreen

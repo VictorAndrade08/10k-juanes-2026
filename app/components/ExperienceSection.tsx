@@ -1,6 +1,8 @@
 "use client";
 
 import { Bebas_Neue } from "next/font/google";
+import { toast } from "sonner";
+import { Map, Users, Package, PartyPopper } from "lucide-react";
 
 const bebas = Bebas_Neue({
   subsets: ["latin"],
@@ -8,6 +10,10 @@ const bebas = Bebas_Neue({
 });
 
 export default function ExperienceSection() {
+  const handleCTA = () => {
+    toast.info("Próximamente — Estate atento 👀");
+  };
+
   return (
     <section className="w-full px-4 py-20 flex justify-center">
       <div
@@ -35,207 +41,88 @@ export default function ExperienceSection() {
           Explora la experiencia 10K Ruta de los Tres Juanes
         </h2>
 
-        {/* GRID DE TARJETAS */}
+        {/* GRID */}
         <div className="grid gap-8 md:gap-10 md:grid-cols-2 lg:grid-cols-4">
 
-          {/* TARJETA 1 */}
-          <article
-            className="
-              rounded-[32px]
-              overflow-hidden
-              bg-white/5
-              border border-white/10
-              flex flex-col
-              min-h-[360px]
-              hover:bg-white/10
-              hover:shadow-[0_12px_35px_rgba(255,255,255,0.08)]
-              backdrop-blur-sm
-              transition duration-200
-            "
-          >
-            <div className="flex-1 bg-white/10 text-white/60 flex items-center justify-center text-sm">
-              Imagen: mapa del recorrido
-            </div>
-
-            <div className="p-8 flex flex-col justify-between">
-              <div>
-                <h3
-                  className={`
-                    text-[24px] sm:text-[28px]
-                    mb-2
-                    tracking-[0.02em]
-                    ${bebas.className}
-                  `}
-                >
-                  La Ruta de la Carrera
-                </h3>
-
-                <p className="text-sm sm:text-base text-white/75 leading-relaxed">
-                  Conoce cada tramo del recorrido nocturno por Ambato.
-                </p>
+          {/* === COMPONENTE TARJETA REUTILIZABLE === */}
+          {[
+            {
+              icon: <Map className="w-14 h-14 text-white/70" />,
+              title: "La Ruta de la Carrera",
+              text: "Conoce cada tramo del recorrido nocturno por Ambato.",
+              cta: "Ver ruta",
+            },
+            {
+              icon: <Users className="w-14 h-14 text-white/70" />,
+              title: "Categorías disponibles",
+              text:
+                "ELITE PRO, Juvenil, Senior, Master, Supermaster, Vilcabambas, Colegial y más.",
+              cta: "Ver categorías",
+            },
+            {
+              icon: <Package className="w-14 h-14 text-white/70" />,
+              title: "El mejor kit deportivo",
+              text:
+                "Camiseta oficial, medalla, chip, medias, Sporty bag, hidratación y más.",
+              cta: "Ver kit completo",
+            },
+            {
+              icon: <PartyPopper className="w-14 h-14 text-white/70" />,
+              title: "Fiesta, ciudad & ambiente",
+              text:
+                "La carrera se integra a la Fiesta de la Fruta y de las Flores: luces, música y tradición.",
+              cta: "Ver más del evento",
+            },
+          ].map((card, i) => (
+            <article
+              key={i}
+              className="
+                rounded-[32px]
+                overflow-hidden
+                bg-white/5
+                border border-white/10
+                flex flex-col
+                min-h-[430px]             /* 🔥 altura uniforme */
+                hover:bg-white/10
+                hover:shadow-[0_12px_35px_rgba(255,255,255,0.08)]
+                backdrop-blur-sm
+                transition duration-200
+              "
+            >
+              {/* ICONO */}
+              <div className="flex items-center justify-center h-[140px] bg-white/10">
+                {card.icon}
               </div>
 
-              <a
-                href="#ruta"
-                className="
-                  mt-5 text-[11px] font-semibold uppercase tracking-[0.30em]
-                  text-white/80 hover:text-white transition
-                "
-              >
-                Ver ruta
-              </a>
-            </div>
-          </article>
+              {/* CONTENIDO */}
+              <div className="p-8 flex flex-col flex-1 justify-between">
+                <div>
+                  <h3
+                    className={`${bebas.className} text-[24px] sm:text-[28px] mb-2 tracking-[0.02em]`}
+                  >
+                    {card.title}
+                  </h3>
 
-          {/* TARJETA 2 */}
-          <article
-            className="
-              rounded-[32px]
-              overflow-hidden
-              bg-white/5
-              border border-white/10
-              flex flex-col
-              min-h-[360px]
-              hover:bg-white/10
-              hover:shadow-[0_12px_35px_rgba(255,255,255,0.08)]
-              backdrop-blur-sm
-              transition duration-200
-            "
-          >
-            <div className="flex-1 bg-white/10 text-white/60 flex items-center justify-center text-sm">
-              Imagen: salida corredores
-            </div>
+                  <p className="text-sm sm:text-base text-white/75 leading-relaxed">
+                    {card.text}
+                  </p>
+                </div>
 
-            <div className="p-8 flex flex-col justify-between">
-              <div>
-                <h3
-                  className={`
-                    text-[24px] sm:text-[28px]
-                    mb-2
-                    tracking-[0.02em]
-                    ${bebas.className}
-                  `}
+                <button
+                  onClick={handleCTA}
+                  className="
+                    mt-6 text-[11px]
+                    font-semibold uppercase
+                    tracking-[0.30em]
+                    text-white/80 hover:text-white
+                    transition
+                  "
                 >
-                  Categorías disponibles
-                </h3>
-
-                <p className="text-sm sm:text-base text-white/75 leading-relaxed">
-                  ELITE PRO, Juvenil, Senior, Master,
-                  Supermaster, Vilcabambas, Colegial y más.
-                </p>
+                  {card.cta}
+                </button>
               </div>
-
-              <a
-                href="#categorias"
-                className="
-                  mt-5 text-[11px] font-semibold uppercase tracking-[0.30em]
-                  text-white/80 hover:text-white transition
-                "
-              >
-                Ver categorías
-              </a>
-            </div>
-          </article>
-
-          {/* TARJETA 3 */}
-          <article
-            className="
-              rounded-[32px]
-              overflow-hidden
-              bg-white/5
-              border border-white/10
-              flex flex-col
-              min-h-[360px]
-              hover:bg-white/10
-              hover:shadow-[0_12px_35px_rgba(255,255,255,0.08)]
-              backdrop-blur-sm
-              transition duration-200
-            "
-          >
-            <div className="flex-1 bg-white/10 text-white/60 flex items-center justify-center text-sm">
-              Imagen: kit del corredor
-            </div>
-
-            <div className="p-8 flex flex-col justify-between">
-              <div>
-                <h3
-                  className={`
-                    text-[24px] sm:text-[28px]
-                    mb-2
-                    tracking-[0.02em]
-                    ${bebas.className}
-                  `}
-                >
-                  El mejor kit deportivo
-                </h3>
-
-                <p className="text-sm sm:text-base text-white/75 leading-relaxed">
-                  Camiseta oficial, medalla, chip, buff, medias,
-                  Sporty bag, hidratación y más.
-                </p>
-              </div>
-
-              <a
-                href="#kit"
-                className="
-                  mt-5 text-[11px] font-semibold uppercase tracking-[0.30em]
-                  text-white/80 hover:text-white transition
-                "
-              >
-                Ver kit completo
-              </a>
-            </div>
-          </article>
-
-          {/* TARJETA 4 */}
-          <article
-            className="
-              rounded-[32px]
-              overflow-hidden
-              bg-white/5
-              border border-white/10
-              flex flex-col
-              min-h-[360px]
-              hover:bg-white/10
-              hover:shadow-[0_12px_35px_rgba(255,255,255,0.08)]
-              backdrop-blur-sm
-              transition duration-200
-            "
-          >
-            <div className="flex-1 bg-white/10 text-white/60 flex items-center justify-center text-sm">
-              Imagen: fiesta & ciudad
-            </div>
-
-            <div className="p-8 flex flex-col justify-between">
-              <div>
-                <h3
-                  className={`
-                    text-[24px] sm:text-[28px]
-                    mb-2
-                    tracking-[0.02em]
-                    ${bebas.className}
-                  `}
-                >
-                  Fiesta, ciudad & ambiente
-                </h3>
-
-                <p className="text-sm sm:text-base text-white/75 leading-relaxed">
-                  La carrera se integra a la Fiesta de la Fruta
-                  y de las Flores: luces, música y tradición.
-                </p>
-              </div>
-
-              <a
-                href="#evento"
-                className="
-                  mt-5 text-[11px] font-semibold uppercase tracking-[0.30em]
-                  text-white/80 hover:text-white transition
-                "
-              >
-                Ver más del evento
-              </a>
-            </div>
-          </article>
+            </article>
+          ))}
         </div>
       </div>
     </section>

@@ -4,13 +4,13 @@ const nextConfig: NextConfig = {
   // 🔹 Muy importante para generar /out con `next build && next export`
   output: "export",
 
-  // Opcional, pero MUY útil si usas <Image /> y vas a hostear en cualquier hosting estático
+  // 🔹 Necesario en hosting estático (Hostinger, cPanel, S3, GitHub Pages…)
   images: {
     unoptimized: true,
   },
 
-  // Si más adelante quieres URLs con / al final (opcional):
-  // trailingSlash: true,
+  // 🔥 Solución al problema de /inscripcion → genera /inscripcion/index.html
+  trailingSlash: true,
 };
 
 export default nextConfig;

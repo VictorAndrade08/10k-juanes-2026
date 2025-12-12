@@ -10,6 +10,9 @@ import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
 import crypto from "crypto";
 
+// ⭐ Import Sonner
+import { Toaster } from "sonner";
+
 // ==============================
 // Fuentes
 // ==============================
@@ -42,7 +45,6 @@ function fileHash(absPath: string) {
     const buf = readFileSync(absPath);
     return crypto.createHash("md5").update(buf).digest("hex").slice(0, 10);
   } catch {
-    // Si el archivo no existe en build, evita romper el export
     return String(Math.floor(Date.now() / 1000));
   }
 }
@@ -50,16 +52,13 @@ function fileHash(absPath: string) {
 const manifest = readManifest();
 
 function cssHref(basename: string) {
-  // Si hay manifest (por ejemplo: { "style.css": "assets/css/style.abc123.css" })
   if (manifest && manifest[basename]) return "/" + manifest[basename];
 
-  // Si no hay manifest, usamos el archivo directo con ?v=HASH
   const abs = resolve(process.cwd(), "public/assets/css/" + basename);
   const v = fileHash(abs);
   return `/assets/css/${basename}?v=${v}`;
 }
 
-// Rutas finales para los CSS externos
 const styleHref = cssHref("style.css");
 const mainHref = cssHref("main.css");
 
@@ -82,11 +81,8 @@ export default function RootLayout({
   return (
     <html lang="es">
       <head>
-        {/* Puedes agregar más metas si quieres, pero el <title> lo maneja metadata */}
         <meta name="theme-color" content="#0b0b12" />
         <link rel="icon" href="/favicon.ico" />
-
-        {/* CSS con cache-busting automático */}
         <link rel="preload" as="style" href={styleHref} />
         <link rel="stylesheet" href={styleHref} />
         <link rel="preload" as="style" href={mainHref} />
@@ -104,7 +100,7 @@ export default function RootLayout({
           overflow-x-hidden
         `}
       >
-        {/* 🌊 CAPA 1 — MANCHAS LÍQUIDAS (ACENTO MAGENTA) */}
+        {/* 🌊 CAPA 1 — MANCHAS LÍQUIDAS */}
         <div
           className="
             fixed inset-0 -z-30
@@ -118,11 +114,11 @@ export default function RootLayout({
               radial-gradient(circle at 55% 85%, rgba(186,0,120,0.75) 0%, transparent 55%)
             `,
             backgroundSize: "230% 230%",
-            opacity: 0.65, // 🔹 menos fuerte para que el fondo oscuro mande
+            opacity: 0.65,
           }}
         />
 
-        {/* 🌌 CAPA 2 — FONDO PRINCIPAL MÁS OSCURO (BASE) */}
+        {/* 🌌 CAPA 2 — FONDO BASE */}
         <div
           className="fixed inset-0 -z-20 pointer-events-none bg-fixed"
           style={{
@@ -154,6 +150,14 @@ export default function RootLayout({
 
         {/* HEADER */}
         <Header />
+
+        {/* ⭐ SONNER — Toaster Global */}
+        <Toaster
+          position="top-center"
+          richColors
+          closeButton
+          duration={2400}
+        />
 
         {/* CONTENIDO */}
         <main className="pt-8 relative z-10">{children}</main>
