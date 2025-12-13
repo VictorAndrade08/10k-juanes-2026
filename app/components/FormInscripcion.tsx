@@ -90,38 +90,43 @@ export default function InscripcionPage() {
   };
 
   // INPUT HANDLER
-  const handleInput = useCallback((e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value, files } = e.target as any;
+  const handleInput = useCallback(
+    (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+      const { name, value, files } = e.target as any;
 
-    if (files && files[0]) {
-      const file = files[0];
+      if (files && files[0]) {
+        const file = files[0];
 
-      const allowed = [
-        "image/jpeg",
-        "image/png",
-        "image/webp",
-        "image/heic",
-        "image/heif",
-        "application/pdf",
-      ];
+        const allowed = [
+          "image/jpeg",
+          "image/png",
+          "image/webp",
+          "image/heic",
+          "image/heif",
+          "application/pdf",
+        ];
 
-      if (!allowed.includes(file.type)) {
-        alert("Formato no permitido.");
+        // ✅ FIX: algunos navegadores devuelven type vacío (especialmente HEIC)
+        // Permitimos si viene sin type, pero igual validamos tamaño.
+        if (file.type && !allowed.includes(file.type)) {
+          alert("Formato no permitido.");
+          return;
+        }
+
+        if (file.size > 10_000_000) {
+          alert("Archivo máximo 10MB.");
+          return;
+        }
+
+        setFormData((f) => ({ ...f, [name]: file }));
+        setPreviewName(file.name);
         return;
       }
 
-      if (file.size > 10_000_000) {
-        alert("Archivo máximo 10MB.");
-        return;
-      }
-
-      setFormData((f) => ({ ...f, [name]: file }));
-      setPreviewName(file.name);
-      return;
-    }
-
-    setFormData((f) => ({ ...f, [name]: value }));
-  }, []);
+      setFormData((f) => ({ ...f, [name]: value }));
+    },
+    []
+  );
 
   const clearFile = useCallback(() => {
     setFormData((f) => ({ ...f, comprobante: null }));
@@ -184,7 +189,10 @@ export default function InscripcionPage() {
         return;
       }
 
-      if (field in validators && !validators[field as keyof typeof validators](value)) {
+      if (
+        field in validators &&
+        !validators[field as keyof typeof validators](value)
+      ) {
         alert(`Campo inválido: ${field}`);
         setSubmitting(false);
         return;
@@ -198,84 +206,117 @@ export default function InscripcionPage() {
     }
 
     setLoading(true);
-    setTimeout(() => setSlow(true), 2500);
 
-    requestAnimationFrame(async () => {
-      const body = new FormData();
-      body.append("categoria", selectedCategory);
-      body.append("precio", selectedPrice.toString());
+    // ✅ FIX: guardamos el timer y lo limpiamos SIEMPRE
+    const slowTimer = window.setTimeout(() => setSlow(true), 2500);
 
-      body.append("cedula", formData.cedula);
-      body.append("nombres", formData.nombres);
-      body.append("apellidos", formData.apellidos);
-      body.append("ciudad", formData.ciudad);
-      body.append("email", formData.email);
-      body.append("telefono", formData.telefono);
-      body.append("edad", formData.edad);
-      body.append("genero", formData.genero);
+    // ✅ FIX: ya no dependemos de RAF (a veces complica debugging)
+    const body = new FormData();
+    body.append("categoria", selectedCategory);
+    body.append("precio", selectedPrice.toString());
 
-      // FIX → enviar el archivo real
-      if (formData.comprobante instanceof File) {
-        body.append("comprobante", formData.comprobante);
+    body.append("cedula", formData.cedula);
+    body.append("nombres", formData.nombres);
+    body.append("apellidos", formData.apellidos);
+    body.append("ciudad", formData.ciudad);
+    body.append("email", formData.email);
+    body.append("telefono", formData.telefono);
+    body.append("edad", formData.edad);
+    body.append("genero", formData.genero);
+
+    // ✅ FIX: enviar archivo con nombre (más compatible)
+    if (formData.comprobante instanceof File) {
+      body.append("comprobante", formData.comprobante, formData.comprobante.name);
+    }
+
+    try {
+      // ✅ FIX: cache no-store para evitar respuestas cacheadas raras
+      const res = await fetch(
+        "https://mandarinas.10kindependenciadeambato.com/wp-json/mandarinas/v1/inscribir",
+        { method: "POST", body, cache: "no-store" }
+      );
+
+      // ✅ FIX: WP a veces devuelve HTML (fatal error / 500) → no explota JSON
+      const rawText = await res.text();
+      let json: any = null;
+      try {
+        json = rawText ? JSON.parse(rawText) : null;
+      } catch {
+        json = null;
       }
 
+      setLoading(false);
+      setSlow(false);
+      clearTimeout(slowTimer);
+
+      // ✅ FIX: validación fuerte
+      if (!res.ok || !json || json.status !== "success") {
+        console.error("WP STATUS:", res.status);
+        console.error("WP RAW:", rawText);
+        console.error("WP JSON:", json);
+        alert("Error al enviar la inscripción (WordPress).");
+        setSubmitting(false);
+        return;
+      }
+
+      // ------------------------------
+      // Paso 2: Enviar a Airtable
+      // ✅ FIX: NO debe romper el flujo si falla (y NO uses secrets en frontend)
+      // Si quieres mantenerlo, usa NEXT_PUBLIC_* (no secrets) o mejor hazlo en el plugin WP.
+      // ------------------------------
       try {
-        // Primer paso: Enviar a WordPress
-        const res = await fetch(
-          "https://mandarinas.10kindependenciadeambato.com/wp-json/mandarinas/v1/inscribir",
-          { method: "POST", body }
-        );
+        const BASE = process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID;
+        const TABLE = process.env.NEXT_PUBLIC_AIRTABLE_TABLE_ID;
+        const KEY = process.env.NEXT_PUBLIC_AIRTABLE_API_KEY;
 
-        const json = await res.json();
-        setLoading(false);
-        setSlow(false);
-
-        if (!json || json.status !== "success") {
-          console.error("ERROR JSON:", json);
-          alert("Error al enviar la inscripción.");
-          setSubmitting(false);
-          return;
-        }
-
-        // Paso 2: Enviar a Airtable
-        const airtablePayload = {
-          records: [
-            {
-              fields: {
-                Cedula: formData.cedula,
-                Nombres: formData.nombres,
-                Apellidos: formData.apellidos,
-                Ciudad: formData.ciudad,
-                Email: formData.email,
-                Telefono: formData.telefono,
-                Edad: formData.edad,
-                Genero: formData.genero,
-                Categoria: selectedCategory,
-                Precio: selectedPrice,
-                Comprobante_URL: json.file_url,
+        if (BASE && TABLE && KEY) {
+          const airtablePayload = {
+            records: [
+              {
+                fields: {
+                  Cedula: formData.cedula,
+                  Nombres: formData.nombres,
+                  Apellidos: formData.apellidos,
+                  Ciudad: formData.ciudad,
+                  Email: formData.email,
+                  Telefono: formData.telefono,
+                  Edad: formData.edad,
+                  Genero: formData.genero,
+                  Categoria: selectedCategory,
+                  Precio: selectedPrice,
+                  Comprobante_URL: json.file_url,
+                },
               },
-            },
-          ],
-        };
+            ],
+          };
 
-        const airtableRes = await fetch(
-          `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/${process.env.AIRTABLE_TABLE_ID}`,
-          {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${process.env.AIRTABLE_API_KEY}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(airtablePayload),
-          }
-        );
+          const airtableRes = await fetch(
+            `https://api.airtable.com/v0/${BASE}/${TABLE}`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${KEY}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(airtablePayload),
+            }
+          );
 
-        const airtableJson = await airtableRes.json();
-        console.log("Airtable response:", airtableJson);
+          const airtableJson = await airtableRes.json();
+          console.log("Airtable response:", airtableJson);
+        } else {
+          console.log(
+            "Airtable skipped: NEXT_PUBLIC_AIRTABLE_* no están configuradas (OK)."
+          );
+        }
+      } catch (e) {
+        console.warn("Airtable falló, pero WP ya guardó. Continuando…", e);
+      }
 
-        setStep(4);
+      // ✅ FIX: avanzamos sí o sí si WP fue success
+      setStep(4);
 
-        const msg = `
+      const msg = `
 📢 *Inscripción 10K Ruta de los Tres Juanes 2026*
 👤 ${formData.nombres} ${formData.apellidos}
 • Cédula/Documento: ${formData.cedula}
@@ -294,17 +335,20 @@ ${json.file_url}
 ⚠️ Favor confirmar mi inscripción.
 `;
 
-        setTimeout(() => {
-          window.location.href = `https://wa.me/593995102378?text=${encodeURIComponent(msg)}`;
-        }, 600);
-      } catch (err) {
-        console.error(err);
-        setLoading(false);
-        alert("Error de conexión");
-      }
+      setTimeout(() => {
+        window.location.href = `https://wa.me/593995102378?text=${encodeURIComponent(
+          msg
+        )}`;
+      }, 600);
+    } catch (err) {
+      console.error(err);
+      setLoading(false);
+      setSlow(false);
+      clearTimeout(slowTimer);
+      alert("Error de conexión");
+    }
 
-      setSubmitting(false);
-    });
+    setSubmitting(false);
   };
 
   // BARRA PROGRESO
@@ -372,14 +416,20 @@ ${json.file_url}
           {loading && (
             <div className="fixed inset-0 bg-black/70 z-50 flex flex-col items-center justify-center gap-4">
               <div className="animate-spin w-16 h-16 border-4 border-gray-600 border-t-white rounded-full"></div>
-              {slow && <p className="text-sm text-gray-300 animate-pulse">Procesando comprobante…</p>}
+              {slow && (
+                <p className="text-sm text-gray-300 animate-pulse">
+                  Procesando comprobante…
+                </p>
+              )}
             </div>
           )}
 
           {/* STEP 1 */}
           {step === 1 && (
             <div>
-              <h1 className={`${display.className} text-3xl mb-6 flex items-center gap-2`}>
+              <h1
+                className={`${display.className} text-3xl mb-6 flex items-center gap-2`}
+              >
                 <FaRunning className="text-white" /> Elige tu categoría
               </h1>
 
@@ -407,7 +457,9 @@ ${json.file_url}
           {/* STEP 2 */}
           {step === 2 && (
             <div>
-              <h1 className={`${display.className} text-3xl mb-6 flex items-center gap-2`}>
+              <h1
+                className={`${display.className} text-3xl mb-6 flex items-center gap-2`}
+              >
                 <HiUserCircle className="text-white" /> Tus datos
               </h1>
 
@@ -430,7 +482,11 @@ ${json.file_url}
                     <input
                       name={name}
                       type={type}
-                      inputMode={type === "number" || name === "telefono" ? "numeric" : undefined}
+                      inputMode={
+                        type === "number" || name === "telefono"
+                          ? "numeric"
+                          : undefined
+                      }
                       pattern={type === "number" ? "[0-9]*" : undefined}
                       onChange={handleInput}
                       value={(formData as any)[name] || ""}
@@ -441,7 +497,9 @@ ${json.file_url}
 
                 {/* edad */}
                 <div>
-                  <label className="text-sm text-gray-400 flex items-center gap-2">🧍 Edad *</label>
+                  <label className="text-sm text-gray-400 flex items-center gap-2">
+                    🧍 Edad *
+                  </label>
                   <input
                     name="edad"
                     type="number"
@@ -455,7 +513,9 @@ ${json.file_url}
 
                 {/* genero */}
                 <div>
-                  <label className="text-sm text-gray-400 flex items-center gap-2">⚧ Género *</label>
+                  <label className="text-sm text-gray-400 flex items-center gap-2">
+                    ⚧ Género *
+                  </label>
                   <select
                     name="genero"
                     onChange={handleInput}
@@ -471,7 +531,10 @@ ${json.file_url}
 
                 {/* botones */}
                 <div className="flex justify-between mt-4">
-                  <button onClick={() => setStep(1)} className="px-4 py-2 bg-white/10 rounded-md">
+                  <button
+                    onClick={() => setStep(1)}
+                    className="px-4 py-2 bg-white/10 rounded-md"
+                  >
                     Volver
                   </button>
 
@@ -491,7 +554,9 @@ ${json.file_url}
           {/* STEP 3 */}
           {step === 3 && (
             <div>
-              <h1 className={`${display.className} text-3xl mb-6`}>Datos para el pago</h1>
+              <h1 className={`${display.className} text-3xl mb-6`}>
+                Datos para el pago
+              </h1>
 
               <div
                 className="p-6 rounded-xl mb-10 space-y-6"
@@ -502,18 +567,27 @@ ${json.file_url}
                     <span className="flex items-center gap-2 text-lg font-semibold mb-2">
                       <FaUniversity className="text-white" /> Banco Pichincha
                     </span>
-                    <strong>Titular:</strong> La Asociación de Periodistas Deportivos de Tungurahua<br />
-                    <strong>Cta:</strong> 2100057760<br />
-                    <strong>RUC:</strong> 1891715141001<br />
-                    <strong>WhatsApp:</strong> 099 504 0437<br /><br />
-                    <strong>Monto a pagar:</strong> ${selectedPrice}<br />
+                    <strong>Titular:</strong> La Asociación de Periodistas Deportivos de
+                    Tungurahua
+                    <br />
+                    <strong>Cta:</strong> 2100057760
+                    <br />
+                    <strong>RUC:</strong> 1891715141001
+                    <br />
+                    <strong>WhatsApp:</strong> 099 504 0437
+                    <br />
+                    <br />
+                    <strong>Monto a pagar:</strong> ${selectedPrice}
+                    <br />
                     <strong>Categoría:</strong> {selectedCategory}
                   </p>
                 </div>
 
                 {/* subir archivo */}
                 <div className="space-y-2">
-                  <label className="text-sm text-gray-400 block">Sube tu comprobante *</label>
+                  <label className="text-sm text-gray-400 block">
+                    Sube tu comprobante *
+                  </label>
 
                   {!previewName ? (
                     <label className="w-full bg-[#1C212B] border border-white/10 px-4 py-6 rounded-lg text-center cursor-pointer hover:bg-[#222935] transition block">
@@ -538,7 +612,10 @@ ${json.file_url}
               </div>
 
               <div className="flex justify-between mt-6">
-                <button onClick={() => setStep(2)} className="px-4 py-2 bg-white/10 rounded-md">
+                <button
+                  onClick={() => setStep(2)}
+                  className="px-4 py-2 bg-white/10 rounded-md"
+                >
                   Volver
                 </button>
 
@@ -558,7 +635,9 @@ ${json.file_url}
           {/* STEP 4 */}
           {step === 4 && (
             <div className="text-center py-20">
-              <h2 className={`${display.className} text-4xl mb-4`}>🎉 Inscripción enviada</h2>
+              <h2 className={`${display.className} text-4xl mb-4`}>
+                🎉 Inscripción enviada
+              </h2>
               <p className="text-gray-400">
                 Gracias <strong>{formData.nombres}</strong>
                 <br />
@@ -566,7 +645,6 @@ ${json.file_url}
               </p>
             </div>
           )}
-
         </div>
       </div>
     </main>
