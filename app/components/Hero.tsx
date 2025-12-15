@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { Bebas_Neue } from "next/font/google";
 
 const bebas = Bebas_Neue({
@@ -10,7 +11,24 @@ const bebas = Bebas_Neue({
 export default function Hero() {
   const VIDEO_ID = "h5QFFj_HwIk";
 
-  const src = `https://www.youtube.com/embed/${VIDEO_ID}?autoplay=1&mute=1&controls=1&loop=1&playlist=${VIDEO_ID}&modestbranding=1&rel=0&playsinline=1`;
+  const src = useMemo(() => {
+    // ✅ "nocookie" a veces ayuda con permisos/cookies en móvil
+    // ✅ autoplay + mute + playsinline = lo máximo para intentar autoplay en mobile
+    const params = new URLSearchParams({
+      autoplay: "1",
+      mute: "1",
+      playsinline: "1",
+      controls: "1",
+      loop: "1",
+      playlist: VIDEO_ID,
+      modestbranding: "1",
+      rel: "0",
+      iv_load_policy: "3",
+      fs: "1",
+    });
+
+    return `https://www.youtube-nocookie.com/embed/${VIDEO_ID}?${params.toString()}`;
+  }, []);
 
   return (
     <section className="w-full px-4 pt-4 pb-6 md:pb-8 flex justify-center">
@@ -48,6 +66,7 @@ export default function Hero() {
               allow="autoplay; encrypted-media; picture-in-picture; web-share"
               allowFullScreen
               loading="eager"
+              referrerPolicy="strict-origin-when-cross-origin"
             />
           </div>
         </div>
