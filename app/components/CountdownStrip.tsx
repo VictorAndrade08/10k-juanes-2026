@@ -40,87 +40,123 @@ export default function CountdownStrip() {
     return () => clearInterval(timer);
   }, []);
 
+  const blocks = [
+    { label: "Días", value: pad(timeLeft.days) },
+    { label: "Horas", value: pad(timeLeft.hours) },
+    { label: "Minutos", value: pad(timeLeft.minutes) },
+    { label: "Segundos", value: pad(timeLeft.seconds) },
+  ];
+
   return (
     <section className="w-full px-4 pt-4 pb-6 md:pb-8 flex justify-center">
       <div
         className="
-          w-full max-w-7xl
-          rounded-[48px]
-          bg-gradient-to-b from-[#070D18] via-[#070D18] to-[#02040A]
-          text-white
+          relative w-full max-w-7xl
+          rounded-[48px] overflow-hidden
+          bg-gradient-to-br from-white via-[#F3F3F3] to-[#E7E7E7]
+          text-black
           px-6 sm:px-8 md:px-16
           py-12 md:py-16
-          shadow-[0_18px_50px_rgba(0,0,0,0.35)]
-          border border-white/10
+          shadow-[0_20px_60px_rgba(0,0,0,0.12)]
+          border border-black/10
         "
       >
-        {/* Encabezado */}
-        <p className="text-xs sm:text-sm tracking-[0.32em] uppercase text-white/55 font-semibold">
-          Presentado por APDT Ambato
-        </p>
+        {/* brillo suave arriba */}
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(1200px_500px_at_20%_0%,rgba(0,0,0,0.05),transparent_55%)]" />
 
-        {/* TÍTULO */}
-        <h2
-          className={`
-            mt-3
-            text-[40px] sm:text-[48px] lg:text-[58px]
-            leading-[1.05]
-            tracking-[0.04em]
-            ${bebas.className}
-          `}
-        >
-          Cuenta regresiva para la
-          <br />
-          10K Ruta de los Tres Juanes 2026
-        </h2>
+        <div className="relative z-10">
+          {/* HEADER: texto izquierda + imagen derecha (zona marcada) */}
+          <div className="grid grid-cols-1 md:grid-cols-[1.35fr_0.65fr] gap-10 md:gap-12 items-start">
+            <div>
+              <p className="text-xs sm:text-sm tracking-[0.32em] uppercase text-black/45 font-semibold">
+                Presentado por APDT Ambato
+              </p>
 
-        {/* Subtítulo */}
-        <p className="mt-4 text-base sm:text-lg text-white/80 max-w-2xl">
-          Viernes 6 de febrero de 2026 · 19h00 · Ambato, Ecuador
-          <br />
-          Revisa el tiempo restante y organiza tu entrenamiento.
-        </p>
-
-        {/* CONTADOR */}
-        <div
-          className="
-            mt-10 grid gap-5 md:gap-8
-            grid-cols-2 md:grid-cols-4
-          "
-        >
-          {[
-            { label: "Días", value: pad(timeLeft.days) },
-            { label: "Horas", value: pad(timeLeft.hours) },
-            { label: "Minutos", value: pad(timeLeft.minutes) },
-            { label: "Segundos", value: pad(timeLeft.seconds) },
-          ].map((item, i) => (
-            <div
-              key={i}
-              className="
-                rounded-[32px]
-                bg-white/5
-                border border-white/10
-                flex flex-col items-center justify-center
-                py-8 md:py-10
-                backdrop-blur-sm
-              "
-            >
-              <span
+              <h2
                 className={`
-                  text-[48px] sm:text-[56px] md:text-[64px]
-                  font-extrabold
-                  leading-none
+                  mt-3
+                  text-[40px] sm:text-[48px] lg:text-[58px]
+                  leading-[1.05]
+                  tracking-[0.04em]
                   ${bebas.className}
                 `}
               >
-                {item.value}
-              </span>
+                Cuenta regresiva para la
+                <br />
+                10K Ruta de los Tres Juanes 2026
+              </h2>
 
-              <span className="mt-3 text-xs sm:text-sm tracking-[0.30em] uppercase text-white/70">
-                {item.label}
-              </span>
+              <p className="mt-4 text-base sm:text-lg text-black/70 max-w-2xl">
+                Viernes 6 de febrero de 2026 · 19h00 · Ambato, Ecuador
+                <br />
+                Revisa el tiempo restante y organiza tu entrenamiento.
+              </p>
             </div>
-          ))}
+
+            {/* IMAGEN ARRIBA DERECHA (centrada y completa, sin cortarse) */}
+            <div className="relative md:pt-1">
+              <div
+                className="
+                  relative
+                  w-full
+                  max-w-[440px]
+                  md:ml-auto
+                  mx-auto
+                  rounded-[28px]
+                  bg-white/55
+                  border border-black/10
+                  shadow-[0_14px_40px_rgba(0,0,0,0.10)]
+                  px-4 sm:px-6
+                  py-4 sm:py-5
+                "
+              >
+                <img
+                  src="/imagen1.webp"
+                  alt="Identidad 10K Ruta de los Tres Juanes"
+                  className="
+                    w-full
+                    h-auto
+                    object-contain
+                    select-none
+                    pointer-events-none
+                  "
+                  draggable={false}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* CONTADOR */}
+          <div className="mt-10 grid gap-5 md:gap-8 grid-cols-2 md:grid-cols-4">
+            {blocks.map((item, i) => (
+              <div
+                key={i}
+                className="
+                  rounded-[32px]
+                  bg-white/92
+                  border border-black/10
+                  flex flex-col items-center justify-center
+                  py-8 md:py-10
+                  shadow-[0_10px_30px_rgba(0,0,0,0.08)]
+                "
+              >
+                <span
+                  className={`
+                    text-[48px] sm:text-[56px] md:text-[64px]
+                    leading-none
+                    text-black
+                    ${bebas.className}
+                  `}
+                >
+                  {item.value}
+                </span>
+
+                <span className="mt-3 text-xs sm:text-sm tracking-[0.30em] uppercase text-black/55">
+                  {item.label}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </section>

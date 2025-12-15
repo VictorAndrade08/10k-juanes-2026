@@ -33,26 +33,30 @@ export default function Hero() {
       <div
         className="
           relative w-full max-w-7xl
-          rounded-[48px] overflow-hidden
-          bg-white/5 backdrop-blur-2xl
-          border border-white/10
+          rounded-[48px]
+          overflow-hidden
+
+          /* 🤍 FONDO BLANCO PURO */
+          bg-white
+          border border-black/10
+
           px-6 sm:px-8 md:px-16
           py-10 md:py-16
           grid grid-cols-1 md:grid-cols-[1.6fr_1fr]
           gap-10
-          shadow-[0_30px_80px_rgba(0,0,0,0.45)]
+          shadow-[0_20px_60px_rgba(0,0,0,0.12)]
         "
       >
-        {/* 🌈 Gradiente decorativo */}
-        <div className="absolute inset-0 bg-gradient-to-br from-[#C02485]/25 via-transparent to-[#5B2DFF]/25 pointer-events-none" />
-
-        {/* VIDEO → TEXTO BLANCO */}
+        {/* VIDEO */}
         <div className="relative z-10 flex items-center justify-center">
           <div
             className="
-              w-full h-[300px] sm:h-[360px] md:h-[440px] lg:h-[500px]
-              rounded-[32px] overflow-hidden
-              bg-black/60 border border-white/10
+              w-full
+              h-[300px] sm:h-[360px] md:h-[440px] lg:h-[500px]
+              rounded-[32px]
+              overflow-hidden
+              bg-black
+              shadow-xl
               relative
             "
           >
@@ -67,14 +71,14 @@ export default function Hero() {
           </div>
         </div>
 
-        {/* TEXTO → FONDO CLARO → TEXTO NEGRO */}
+        {/* TEXTO */}
         <div className="relative z-10 flex flex-col justify-center">
           {/* Eyebrow */}
           <p className="uppercase tracking-[0.32em] text-xs sm:text-sm text-black/60 font-semibold">
             Vive la magia de correr bajo las luces de Ambato
           </p>
 
-          {/* Título principal */}
+          {/* Título */}
           <h1
             className={`
               mt-4
@@ -111,6 +115,7 @@ export default function Hero() {
                 font-bold uppercase
                 shadow-lg shadow-[#C02485]/40
                 hover:opacity-90 transition
+                whitespace-nowrap
               "
             >
               ¡Inscríbete aquí ahora!
@@ -122,18 +127,19 @@ export default function Hero() {
               className="
                 inline-flex items-center justify-center
                 px-8 py-3 rounded-full
-                border border-black/25
+                border border-black/30
                 text-black text-[13px] tracking-[0.20em]
                 font-semibold uppercase
                 hover:bg-black/5 transition
+                whitespace-nowrap
               "
             >
               Ver reglas &amp; premios
             </a>
           </div>
 
-          {/* Legal / organizador */}
-          <p className="mt-6 text-xs sm:text-sm text-black/55">
+          {/* Legal */}
+          <p className="mt-6 text-xs sm:text-sm text-black/60">
             Organiza: Asociación de Periodistas Deportivos de Tungurahua · Ambato – Ecuador
           </p>
         </div>

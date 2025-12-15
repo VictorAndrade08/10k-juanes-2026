@@ -10,43 +10,38 @@ const IMAGES = [
 export default function Publicidad() {
   const [index, setIndex] = useState(0);
 
-  // 🔁 Auto slide
   useEffect(() => {
     const interval = setInterval(() => {
       setIndex((prev) => (prev + 1) % IMAGES.length);
-    }, 4500); // cambia cada 4.5s
-
+    }, 4500);
     return () => clearInterval(interval);
   }, []);
 
   return (
-    <section className="w-full flex justify-center px-4 mt-12">
-      {/* CONTENEDOR FIJO (igual al header) */}
+    <section className="w-full flex justify-center px-4 mt-3 md:mt-5 mb-2 md:mb-3">
       <div
         className="
-          relative
-          w-full max-w-7xl
-          rounded-3xl
+          relative w-full max-w-7xl
+          rounded-[32px]
           overflow-hidden
           bg-black
-          shadow-[0_20px_60px_rgba(0,0,0,0.45)]
+          shadow-[0_10px_30px_rgba(0,0,0,0.28)]
         "
       >
-        {/* ALTURA FIJA → nunca cambia */}
-        <div className="relative w-full aspect-[16/6] bg-black">
+        {/* un poco más “bajita” para que no se sienta tan larga */}
+        <div className="relative w-full aspect-[16/6.2] sm:aspect-[16/6] md:aspect-[16/5.6] bg-black">
           {IMAGES.map((src, i) => (
             <img
               key={src}
               src={src}
               alt="Publicidad oficial"
               className={`
-                absolute inset-0
-                w-full h-full
-                object-cover
+                absolute inset-0 w-full h-full object-cover
                 transition-opacity duration-700 ease-in-out
                 ${i === index ? "opacity-100" : "opacity-0"}
               `}
               loading="lazy"
+              decoding="async"
             />
           ))}
         </div>

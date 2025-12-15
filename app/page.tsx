@@ -15,10 +15,11 @@ export default function Home() {
     <>
       {/* 🔥 Wrapper global que controla el espaciado entre secciones */}
       <div className="flex flex-col gap-10 md:gap-14">
-        <Hero />
+        
 
         {/* 🎯 Publicidad estratégica */}
         <Publicidad />
+        <Hero />
 
         <TopGallery />
         <SponsorsStrip />
