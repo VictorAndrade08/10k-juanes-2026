@@ -25,19 +25,22 @@ export default function Header() {
         <div className="flex items-center gap-3 sm:gap-4">
           <div
             className="
-              w-12 h-12 sm:w-14 sm:h-14 
+              w-12 h-12 sm:w-14 sm:h-14
               rounded-2xl overflow-hidden
               bg-[#C02485]
               shadow-[0_4px_12px_rgba(192,36,133,0.35)]
               flex items-center justify-center
+              flex-shrink-0
             "
           >
             <Image
               src="https://mandarinas.10kindependenciadeambato.com/wp-content/uploads/2025/12/white.svg"
-              alt="10K Logo"
-              width={56}
-              height={56}
-              className="w-8 h-8 object-contain"
+              alt="10K Ruta de los Tres Juanes"
+              width={32}
+              height={32}
+              sizes="(max-width: 640px) 32px, 40px"
+              className="object-contain"
+              unoptimized
               priority
             />
           </div>
@@ -67,7 +70,7 @@ export default function Header() {
             className="
               hidden xl:inline-flex
               px-4 sm:px-5 py-2 text-[11px] sm:text-[12px]
-              bg-[#E5006D] text-white 
+              bg-[#E5006D] text-white
               rounded-full uppercase tracking-[0.22em]
               font-semibold shadow-sm
               whitespace-nowrap
@@ -91,7 +94,6 @@ export default function Header() {
             Reglamento
           </a>
 
-          {/* 🔥 AQUI SOLO CAMBIÉ EL DESTINO DEL LINK */}
           <a
             href="/inscripcion"
             className="
