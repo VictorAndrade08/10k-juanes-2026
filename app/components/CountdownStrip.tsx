@@ -41,7 +41,7 @@ export default function CountdownStrip() {
   }, []);
 
   return (
-    <section className="w-full px-4 py-14 flex justify-center">
+    <section className="w-full px-4 pt-4 pb-6 md:pb-8 flex justify-center">
       <div
         className="
           w-full max-w-7xl
@@ -59,7 +59,7 @@ export default function CountdownStrip() {
           Presentado por Vehicentro
         </p>
 
-        {/* TÍTULO GRANDE · TIPOGRAFÍA BEBAS */}
+        {/* TÍTULO */}
         <h2
           className={`
             mt-3
@@ -74,7 +74,7 @@ export default function CountdownStrip() {
           10K Ruta de los Tres Juanes 2026
         </h2>
 
-        {/* Subtítulo descriptivo */}
+        {/* Subtítulo */}
         <p className="mt-4 text-base sm:text-lg text-white/80 max-w-2xl">
           Viernes 6 de febrero de 2026 · 19h00 · Ambato, Ecuador  
           Revisa el tiempo restante y organiza tu entrenamiento.
@@ -104,7 +104,6 @@ export default function CountdownStrip() {
                 backdrop-blur-sm
               "
             >
-              {/* Número gigante */}
               <span
                 className={`
                   text-[48px] sm:text-[56px] md:text-[64px]
@@ -116,7 +115,6 @@ export default function CountdownStrip() {
                 {item.value}
               </span>
 
-              {/* Etiqueta */}
               <span className="mt-3 text-xs sm:text-sm tracking-[0.30em] uppercase text-white/70">
                 {item.label}
               </span>

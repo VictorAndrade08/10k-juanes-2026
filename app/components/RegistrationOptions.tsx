@@ -9,7 +9,7 @@ const bebas = Bebas_Neue({
 
 export default function RegistrationOptions() {
   return (
-    <section className="w-full px-4 py-16 flex justify-center">
+    <section className="w-full px-4 pt-4 pb-6 md:pb-8 flex justify-center">
       <div
         className="
           w-full max-w-7xl
@@ -73,7 +73,6 @@ export default function RegistrationOptions() {
             </ol>
           </div>
 
-          {/* CTA */}
           <div className="mt-10">
             <a
               href="/inscripcion"
@@ -162,7 +161,6 @@ export default function RegistrationOptions() {
             </ol>
           </div>
 
-          {/* CTA WHATSAPP */}
           <div className="mt-10">
             <a
               href="https://wa.me/593995102378"

@@ -38,24 +38,25 @@ export default function FloatingCTA() {
       }}
       className="
         fixed z-[9999]
-        right-5 bottom-5
+        right-4 bottom-3
         md:right-8 md:bottom-8
 
-        px-8 py-4
+        px-7 py-3 md:px-8 md:py-4
         rounded-full
 
         text-white font-bold uppercase tracking-[0.20em]
-        text-[13px] md:text-[14px]
+        text-[12px] md:text-[14px]
 
         bg-gradient-to-r from-[#FF0080] to-[#E5006D]
-        shadow-[0_0_25px_rgba(255,0,128,0.55)]
+        shadow-[0_0_22px_rgba(255,0,128,0.55)]
         hover:shadow-[0_0_35px_rgba(255,0,128,0.75)]
 
         animate-pulse
         transition-all duration-300 cursor-pointer
 
-        md:w-auto
-        w-[90%] left-1/2 md:left-auto -translate-x-1/2 md:translate-x-0
+        w-[88%] max-w-md
+        left-1/2 -translate-x-1/2
+        md:w-auto md:left-auto md:translate-x-0
       "
     >
       Inscribirme ahora

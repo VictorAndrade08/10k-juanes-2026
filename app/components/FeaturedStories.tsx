@@ -1,7 +1,7 @@
 "use client";
 
 import { Bebas_Neue } from "next/font/google";
-import { Trophy  } from "lucide-react"; // 👈 ÍCONO correcto para representar la carrera
+import { Trophy } from "lucide-react";
 
 const bebas = Bebas_Neue({
   subsets: ["latin"],
@@ -10,7 +10,7 @@ const bebas = Bebas_Neue({
 
 export default function FeaturedStories() {
   return (
-    <section className="w-full px-4 py-24 flex justify-center">
+    <section className="w-full px-4 pt-4 pb-6 md:pb-8 flex justify-center">
       <div
         className="
           w-full max-w-7xl
@@ -83,7 +83,7 @@ export default function FeaturedStories() {
             </p>
           </div>
 
-          {/* ÍCONO REPRESENTATIVO */}
+          {/* ÍCONO */}
           <div
             className="
               w-full md:w-[360px]
@@ -94,7 +94,7 @@ export default function FeaturedStories() {
               flex items-center justify-center
             "
           >
-            <Trophy  className="w-24 h-24 text-white/65" strokeWidth={1.6} />
+            <Trophy className="w-24 h-24 text-white/65" strokeWidth={1.6} />
           </div>
         </div>
       </div>

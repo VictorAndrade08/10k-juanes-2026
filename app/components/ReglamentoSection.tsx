@@ -1,5 +1,3 @@
-"use client";
-
 import { Bebas_Neue } from "next/font/google";
 
 const bebas = Bebas_Neue({
@@ -11,7 +9,10 @@ const reglamentoUrl = "/reglamento-10k-ruta-tres-juanes-2026.pdf";
 
 export default function ReglamentoSection() {
   return (
-    <section id="reglamento" className="w-full px-4 py-20 flex justify-center">
+    <section
+      id="reglamento"
+      className="w-full px-4 pt-4 pb-6 md:pb-8 flex justify-center"
+    >
       <div
         className="
           w-full max-w-7xl
@@ -25,14 +26,7 @@ export default function ReglamentoSection() {
         "
       >
         {/* LABEL */}
-        <p
-          className="
-            text-xs sm:text-sm 
-            uppercase tracking-[0.32em] 
-            text-white/55 
-            mb-4 font-semibold
-          "
-        >
+        <p className="text-xs sm:text-sm uppercase tracking-[0.32em] text-white/55 mb-4 font-semibold">
           Reglamento oficial
         </p>
 
@@ -57,15 +51,15 @@ export default function ReglamentoSection() {
           para facilitar la lectura a deportistas y medios de comunicación.
         </p>
 
-        {/* TIP */}
-        <p className="text-sm text-white/55 mb-10 max-w-4xl leading-relaxed">
+        {/* TIP (ESPACIADO AJUSTADO) */}
+        <p className="text-sm text-white/55 mb-6 max-w-4xl leading-relaxed">
           Consejo: en producción, cada artículo puede tener un encabezado{" "}
           <strong>&lt;h4&gt;</strong> y listas <strong>&lt;ul&gt;</strong> para
           que el reglamento sea más claro y fácil de consultar.
         </p>
 
         {/* CTA */}
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3">
           <a
             href={reglamentoUrl}
             target="_blank"

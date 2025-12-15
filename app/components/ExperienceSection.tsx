@@ -15,7 +15,7 @@ export default function ExperienceSection() {
   };
 
   return (
-    <section className="w-full px-4 py-20 flex justify-center">
+    <section className="w-full px-4 pt-4 pb-6 md:pb-8 flex justify-center">
       <div
         className="
           w-full max-w-7xl
@@ -43,8 +43,6 @@ export default function ExperienceSection() {
 
         {/* GRID */}
         <div className="grid gap-8 md:gap-10 md:grid-cols-2 lg:grid-cols-4">
-
-          {/* === COMPONENTE TARJETA REUTILIZABLE === */}
           {[
             {
               icon: <Map className="w-14 h-14 text-white/70" />,
@@ -82,19 +80,17 @@ export default function ExperienceSection() {
                 bg-white/5
                 border border-white/10
                 flex flex-col
-                min-h-[430px]             /* 🔥 altura uniforme */
+                min-h-[430px]
                 hover:bg-white/10
                 hover:shadow-[0_12px_35px_rgba(255,255,255,0.08)]
                 backdrop-blur-sm
                 transition duration-200
               "
             >
-              {/* ICONO */}
               <div className="flex items-center justify-center h-[140px] bg-white/10">
                 {card.icon}
               </div>
 
-              {/* CONTENIDO */}
               <div className="p-8 flex flex-col flex-1 justify-between">
                 <div>
                   <h3

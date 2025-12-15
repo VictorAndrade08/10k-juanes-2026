@@ -53,7 +53,7 @@ export default function SponsorsStrip() {
   const duplicated = [...logos, ...logos];
 
   return (
-    <section className="w-full px-4 py-12 flex justify-center">
+    <section className="w-full px-4 pt-4 pb-6 md:pb-8 flex justify-center">
       <div
         className="
           w-full max-w-7xl

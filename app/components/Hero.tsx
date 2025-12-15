@@ -9,7 +9,7 @@ const bebas = Bebas_Neue({
 
 export default function Hero() {
   return (
-    <section className="w-full px-4 pt-6 pb-10 flex justify-center">
+    <section className="w-full px-4 pt-4 pb-6 md:pb-8 flex justify-center">
       <div
         className="
           w-full max-w-7xl 
