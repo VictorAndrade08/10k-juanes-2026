@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Montserrat } from "next/font/google";  // Agregar Montserrat
+import { Geist, Geist_Mono, Montserrat } from "next/font/google";
 import "./globals.css";
 
 import Header from "./components/Header";
@@ -25,7 +25,7 @@ const geistMono = Geist_Mono({
 });
 
 const montserrat = Montserrat({
-  variable: "--font-montserrat", // Nueva fuente para los encabezados
+  variable: "--font-montserrat",
   subsets: ["latin"],
   weight: ["700", "800", "900"],
 });
@@ -114,41 +114,100 @@ export default function RootLayout({
         className={`
           ${geistSans.variable}
           ${geistMono.variable}
-          ${montserrat.variable}  // Aplicar la nueva fuente
+          ${montserrat.variable}
           antialiased
           min-h-screen
           text-white
-          bg-[#080B22]   /* ✅ Fondo oscuro */
+          bg-[#080B22]
           relative
           overflow-x-hidden
         `}
       >
-        {/* 🌊 CAPA 1 — MANCHAS LÍQUIDAS */}
+        {/* ===========================
+            FONDO TIPO AFICHE (como la imagen)
+            =========================== */}
+
+        {/* CAPA 0: base oscura */}
         <div
-          className="fixed inset-0 -z-30 animate-liquidFlow pointer-events-none"
+          className="fixed inset-0 -z-40 pointer-events-none"
+          style={{ background: "#080B22" }}
+        />
+
+        {/* CAPA 1: degradado magenta → morado (principal) */}
+        <div
+          className="fixed inset-0 -z-30 pointer-events-none"
           style={{
             backgroundImage: `
-              radial-gradient(circle at 18% 25%, rgba(255,120,190,0.8) 0%, transparent 55%),
-              radial-gradient(circle at 75% 35%, rgba(236,0,140,0.7) 0%, transparent 55%),
-              radial-gradient(circle at 55% 85%, rgba(186,0,120,0.75) 0%, transparent 55%)
+              linear-gradient(115deg,
+                #FF4EC4 0%,
+                #C02485 28%,
+                #9B5CFF 55%,
+                #2A0836 78%,
+                #080B22 100%
+              )
             `,
-            backgroundSize: "230% 230%",
-            backgroundRepeat: "no-repeat",
-            backgroundPosition: "center",
-            opacity: 0.65,
+            backgroundSize: "cover",
+            backgroundPosition: "center top",
+            opacity: 0.92,
           }}
         />
 
-        {/* 🌌 CAPA 2 — FONDO BASE (SIN FRANJA) */}
+        {/* CAPA 2: geometría suave + viñeta (da ese look “poster”) */}
         <div
           className="fixed inset-0 -z-20 pointer-events-none"
           style={{
-            backgroundImage:
-              "linear-gradient(180deg, #080B22 0%, #0A0512 18%, #1A0630 45%, #B0007A 75%, #FF4F9A 100%)",
-            backgroundRepeat: "no-repeat",
+            backgroundImage: `
+              linear-gradient(180deg, rgba(0,0,0,0.08), rgba(0,0,0,0.55)),
+              radial-gradient(1200px 650px at 18% 22%, rgba(255,255,255,0.12), transparent 60%),
+              radial-gradient(1000px 600px at 62% 18%, rgba(0,0,0,0.22), transparent 60%),
+              linear-gradient(135deg, rgba(255,255,255,0.08) 0%, transparent 35%),
+              linear-gradient(225deg, rgba(0,0,0,0.12) 0%, transparent 40%)
+            `,
             backgroundSize: "cover",
-            backgroundPosition: "center top",
-            backgroundColor: "#080B22",
+            backgroundPosition: "center",
+            mixBlendMode: "soft-light",
+            opacity: 0.9,
+          }}
+        />
+
+        {/* CAPA 3: grano (grain) leve para que se sienta “impreso” */}
+        <div
+          className="fixed inset-0 -z-10 pointer-events-none"
+          style={{
+            backgroundImage: `
+              repeating-linear-gradient(
+                0deg,
+                rgba(255,255,255,0.02) 0px,
+                rgba(255,255,255,0.02) 1px,
+                transparent 1px,
+                transparent 3px
+              )
+            `,
+            opacity: 0.35,
+            mixBlendMode: "overlay",
+          }}
+        />
+
+        {/* CAPA 4: franja blanca diagonal inferior + sombra gris (como el banner) */}
+        <div
+          className="fixed inset-x-0 bottom-0 -z-[5] pointer-events-none"
+          style={{
+            height: "38vh",
+            background: "#FFFFFF",
+            clipPath: "polygon(0 38%, 100% 0%, 100% 100%, 0% 100%)",
+            boxShadow: "0 -18px 60px rgba(0,0,0,0.35)",
+            opacity: 0.92,
+          }}
+        />
+        <div
+          className="fixed inset-x-0 bottom-0 -z-[4] pointer-events-none"
+          style={{
+            height: "18vh",
+            background:
+              "linear-gradient(90deg, rgba(0,0,0,0.10), rgba(0,0,0,0.02))",
+            clipPath: "polygon(0 70%, 100% 25%, 100% 100%, 0% 100%)",
+            opacity: 0.55,
+            transform: "translateY(10px)",
           }}
         />
 

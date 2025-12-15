@@ -12,8 +12,6 @@ export default function Hero() {
   const VIDEO_ID = "h5QFFj_HwIk";
 
   const src = useMemo(() => {
-    // ✅ "nocookie" a veces ayuda con permisos/cookies en móvil
-    // ✅ autoplay + mute + playsinline = lo máximo para intentar autoplay en mobile
     const params = new URLSearchParams({
       autoplay: "1",
       mute: "1",
@@ -34,28 +32,27 @@ export default function Hero() {
     <section className="w-full px-4 pt-4 pb-6 md:pb-8 flex justify-center">
       <div
         className="
-          w-full max-w-7xl 
-          rounded-[48px] 
-          overflow-hidden
-          bg-gradient-to-br from-[#070D18] via-[#070D18] to-[#02040A]
-          text-white
-          px-6 sm:px-8 md:px-16 
+          relative w-full max-w-7xl
+          rounded-[48px] overflow-hidden
+          bg-white/5 backdrop-blur-2xl
+          border border-white/10
+          px-6 sm:px-8 md:px-16
           py-10 md:py-16
           grid grid-cols-1 md:grid-cols-[1.6fr_1fr]
           gap-10
-          shadow-[0_18px_50px_rgba(0,0,0,0.35)]
+          shadow-[0_30px_80px_rgba(0,0,0,0.45)]
         "
       >
-        {/* VIDEO */}
-        <div className="flex items-center justify-center">
+        {/* 🌈 Gradiente decorativo */}
+        <div className="absolute inset-0 bg-gradient-to-br from-[#C02485]/25 via-transparent to-[#5B2DFF]/25 pointer-events-none" />
+
+        {/* VIDEO → TEXTO BLANCO */}
+        <div className="relative z-10 flex items-center justify-center">
           <div
             className="
-              w-full 
-              h-[300px] sm:h-[360px] md:h-[440px] lg:h-[500px]
-              rounded-[32px]
-              border border-white/10
-              overflow-hidden
-              bg-black/40
+              w-full h-[300px] sm:h-[360px] md:h-[440px] lg:h-[500px]
+              rounded-[32px] overflow-hidden
+              bg-black/60 border border-white/10
               relative
             "
           >
@@ -63,76 +60,80 @@ export default function Hero() {
               className="absolute inset-0 w-full h-full"
               src={src}
               title="10K Ruta de los Tres Juanes – Video"
-              allow="autoplay; encrypted-media; picture-in-picture; web-share"
+              allow="autoplay; encrypted-media; picture-in-picture"
               allowFullScreen
               loading="eager"
-              referrerPolicy="strict-origin-when-cross-origin"
             />
           </div>
         </div>
 
-        {/* TEXTO */}
-        <div className="flex flex-col justify-center">
-          <p className="uppercase tracking-[0.32em] text-xs sm:text-sm text-white/60 font-semibold">
+        {/* TEXTO → FONDO CLARO → TEXTO NEGRO */}
+        <div className="relative z-10 flex flex-col justify-center">
+          {/* Eyebrow */}
+          <p className="uppercase tracking-[0.32em] text-xs sm:text-sm text-black/60 font-semibold">
             Vive la magia de correr bajo las luces de Ambato
           </p>
 
+          {/* Título principal */}
           <h1
             className={`
               mt-4
               text-[40px] sm:text-[52px] lg:text-[66px]
               leading-[1.02]
+              text-black
               ${bebas.className}
             `}
           >
-            <span className="block tracking-[0.08em]">10K Ruta de los</span>
-            <span className="block tracking-[0.08em]">Tres Juanes 2026</span>
+            <span className="block tracking-[0.08em]">
+              10K Ruta de los
+            </span>
+            <span className="block tracking-[0.08em]">
+              Tres Juanes 2026
+            </span>
           </h1>
 
-          <p className="mt-5 text-base sm:text-lg text-white/80 max-w-xl">
+          {/* Descripción */}
+          <p className="mt-5 text-base sm:text-lg text-black/75 max-w-xl">
             ¡Corre bajo las luces de Ambato y celebra la Fiesta de la Fruta y de
             las Flores en una carrera nocturna única en Ecuador!
           </p>
 
-          {/* BOTONES */}
+          {/* CTAs */}
           <div className="mt-8 flex flex-wrap gap-4">
+            {/* CTA principal */}
             <a
               href="/inscripcion"
               className="
                 inline-flex items-center justify-center
-                px-8 py-3
-                rounded-full 
+                px-8 py-3 rounded-full
                 bg-gradient-to-r from-[#C02485] to-[#E5006D]
                 text-white text-[13px] tracking-[0.20em]
-                font-bold uppercase 
-                shadow-lg shadow-[#C02485]/35
-                hover:opacity-90 
-                transition
-                whitespace-nowrap
+                font-bold uppercase
+                shadow-lg shadow-[#C02485]/40
+                hover:opacity-90 transition
               "
             >
               ¡Inscríbete aquí ahora!
             </a>
 
+            {/* CTA secundario */}
             <a
               href="#reglamento"
               className="
                 inline-flex items-center justify-center
-                px-8 py-3
-                rounded-full 
-                border border-white/30
-                text-white text-[13px] tracking-[0.20em]
+                px-8 py-3 rounded-full
+                border border-black/25
+                text-black text-[13px] tracking-[0.20em]
                 font-semibold uppercase
-                hover:bg-white/5 
-                transition
-                whitespace-nowrap
+                hover:bg-black/5 transition
               "
             >
               Ver reglas &amp; premios
             </a>
           </div>
 
-          <p className="mt-6 text-xs sm:text-sm text-white/55">
+          {/* Legal / organizador */}
+          <p className="mt-6 text-xs sm:text-sm text-black/55">
             Organiza: Asociación de Periodistas Deportivos de Tungurahua · Ambato – Ecuador
           </p>
         </div>

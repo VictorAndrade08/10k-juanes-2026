@@ -63,7 +63,9 @@ export default function Header() {
               >
                 10K Ruta de los Tres Juanes
               </span>
-              <p className="text-[12px] sm:text-[13px] md:text-[14px] text-[#444]/80 font-medium mt-0.5">
+
+              {/* ❌ Oculto en mobile */}
+              <p className="hidden sm:block text-[12px] sm:text-[13px] md:text-[14px] text-[#444]/80 font-medium mt-0.5">
                 Ambato · Ecuador · Carrera nocturna 2026
               </p>
             </div>
