@@ -31,17 +31,17 @@ export default function Footer() {
             className="
               w-20 h-20
               rounded-3xl
-              bg-white
+              bg-[#C02485]
               flex items-center justify-center
-              text-[#050B16]
-              font-extrabold
-              text-base
-              tracking-[0.22em]
-              uppercase
-              shadow-[0_12px_30px_rgba(255,255,255,0.25)]
+              shadow-[0_12px_30px_rgba(192,36,133,0.35)]
             "
           >
-            10K
+            <img
+              src="/white.svg"
+              alt="10K Ruta de los Tres Juanes"
+              className="w-10 h-10 object-contain"
+              loading="eager"
+            />
           </div>
 
           <div className="flex flex-col justify-center">
@@ -55,20 +55,17 @@ export default function Footer() {
               Ruta de los Tres Juanes 2026
             </h3>
 
-            <p className="text-sm text-white/70 mt-1">
-              Ambato – Ecuador
-            </p>
+            <p className="text-sm text-white/70 mt-1">Ambato – Ecuador</p>
 
             <p className="mt-5 text-xs sm:text-sm text-white/55 leading-relaxed max-w-md">
-              © 2026. Evento oficial organizado por la Asociación de Periodistas Deportivos de Tungurahua. 
-              Desarrollo web por Prez Agencia.
+              © 2026. Evento oficial organizado por la Asociación de Periodistas
+              Deportivos de Tungurahua. Desarrollo web por Prez Agencia.
             </p>
           </div>
         </div>
 
         {/* DERECHA — ENLACES */}
         <div className="flex-[1.2] grid grid-cols-1 sm:grid-cols-3 gap-8 text-sm">
-          
           {/* Enlaces */}
           <div>
             <h4
@@ -81,9 +78,21 @@ export default function Footer() {
             </h4>
 
             <ul className="space-y-2 text-white/75">
-              <li><a href="#inscripcion" className="hover:text-white transition">Inscripción</a></li>
-              <li><a href="#reglamento" className="hover:text-white transition">Reglamento</a></li>
-              <li><a href="#faq" className="hover:text-white transition">Preguntas frecuentes</a></li>
+              <li>
+                <a href="#inscripcion" className="hover:text-white transition">
+                  Inscripción
+                </a>
+              </li>
+              <li>
+                <a href="#reglamento" className="hover:text-white transition">
+                  Reglamento
+                </a>
+              </li>
+              <li>
+                <a href="#faq" className="hover:text-white transition">
+                  Preguntas frecuentes
+                </a>
+              </li>
             </ul>
           </div>
 
@@ -117,23 +126,34 @@ export default function Footer() {
 
             <ul className="space-y-2 text-white/75">
               <li>
-                <a href="https://wa.me/593995040437" className="hover:text-white transition" target="_blank">
+                <a
+                  href="https://wa.me/593995040437"
+                  className="hover:text-white transition"
+                  target="_blank"
+                >
                   WhatsApp
                 </a>
               </li>
               <li>
-                <a href="https://instagram.com" className="hover:text-white transition" target="_blank">
+                <a
+                  href="https://instagram.com"
+                  className="hover:text-white transition"
+                  target="_blank"
+                >
                   Instagram
                 </a>
               </li>
               <li>
-                <a href="https://facebook.com" className="hover:text-white transition" target="_blank">
+                <a
+                  href="https://facebook.com"
+                  className="hover:text-white transition"
+                  target="_blank"
+                >
                   Facebook
                 </a>
               </li>
             </ul>
           </div>
-
         </div>
       </div>
     </footer>

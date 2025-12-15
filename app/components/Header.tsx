@@ -44,7 +44,7 @@ export default function Header() {
             >
               {/* ✅ IMG NATIVO (FIX iOS) */}
               <img
-                src="https://mandarinas.10kindependenciadeambato.com/wp-content/uploads/2025/12/white.svg"
+                src="/white.svg"
                 alt="10K Ruta de los Tres Juanes"
                 className="w-8 h-8 sm:w-9 sm:h-9 object-contain"
                 loading="eager"
