@@ -15,7 +15,9 @@ export default function Header() {
   return (
     <>
       {/* ================= HEADER ================= */}
-      <header className="sticky top-3 z-50 w-full flex justify-center px-4">
+      {/* ✅ NO sticky en mobile / ✅ sticky desde lg+ */}
+      {/* ✅ En responsive baja un poco (mt-4 / sm:mt-5) */}
+      <header className="relative mt-4 sm:mt-5 lg:mt-0 lg:sticky lg:top-3 z-50 w-full flex justify-center px-4">
         <div
           className="
             w-full max-w-7xl mx-auto
@@ -156,15 +158,23 @@ export default function Header() {
               <button
                 onClick={() => setOpen(false)}
                 className="p-2 rounded-full hover:bg-white/10 transition"
+                aria-label="Cerrar menú"
               >
                 <HiXMark className="w-7 h-7 text-white" />
               </button>
             </div>
 
             <nav className="flex flex-col gap-6">
-              <a href="/" className="text-xl font-semibold">Inicio</a>
-              <a href="#reglamento" className="text-xl font-semibold">Reglamento</a>
-              <a href="/verificar" className="text-xl font-semibold text-[#C02485]">
+              <a href="/" className="text-xl font-semibold">
+                Inicio
+              </a>
+              <a href="#reglamento" className="text-xl font-semibold">
+                Reglamento
+              </a>
+              <a
+                href="/verificar"
+                className="text-xl font-semibold text-[#C02485]"
+              >
                 Verificar inscripción
               </a>
               <a

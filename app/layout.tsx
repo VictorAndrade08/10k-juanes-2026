@@ -5,12 +5,10 @@ import "./globals.css";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 
-// ---------- Server-only (solo se ejecuta en el build/render del servidor) ----------
 import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
 import crypto from "crypto";
 
-// ⭐ Import Sonner
 import { Toaster } from "sonner";
 
 // ==============================
@@ -79,13 +77,33 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es" className="dark" style={{ colorScheme: "dark" }}>
+    <html
+      lang="es"
+      className="dark"
+      style={{ colorScheme: "dark" }}
+      suppressHydrationWarning
+    >
       <head>
-        <meta name="theme-color" content="#0b0b12" />
+        {/* ✅ 0) Anti-blanco: fuerza dark ANTES de cargar CSS/React */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                var html = document.documentElement;
+                html.classList.add('dark');
+                html.style.colorScheme = 'dark';
+              } catch (e) {}
+            `,
+          }}
+        />
+
+        <meta name="theme-color" content="#05071A" />
         <meta name="color-scheme" content="dark" />
         <link rel="icon" href="/favicon.ico" />
+
         <link rel="preload" as="style" href={styleHref} />
         <link rel="stylesheet" href={styleHref} />
+
         <link rel="preload" as="style" href={mainHref} />
         <link rel="stylesheet" href={mainHref} />
       </head>
@@ -97,6 +115,7 @@ export default function RootLayout({
           antialiased
           min-h-screen
           text-white
+          bg-rtj-bg
           relative
           overflow-x-hidden
         `}
@@ -153,12 +172,7 @@ export default function RootLayout({
         <Header />
 
         {/* ⭐ SONNER — Toaster Global */}
-        <Toaster
-          position="top-center"
-          richColors
-          closeButton
-          duration={2400}
-        />
+        <Toaster position="top-center" richColors closeButton duration={2400} />
 
         {/* CONTENIDO */}
         <main className="pt-8 relative z-10">{children}</main>

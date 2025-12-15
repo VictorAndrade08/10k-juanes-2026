@@ -1,12 +1,16 @@
 @import "tailwindcss";
 
 /* ========================================= */
-/* VARIABLES BASE */
+/* VARIABLES BASE (DARK FIJO) */
 /* ========================================= */
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* ✅ oscuro fijo pero más claro */
+  --background: #080B22;
+  --foreground: #ededed;
+
+  /* ✅ ayuda a Safari/Chrome a usar UI oscura */
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -16,25 +20,19 @@
   --font-mono: var(--font-geist-mono);
 }
 
-/* DARK MODE */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* BODY BASE */
+html,
+body {
+  background: var(--background) !important;
+  color: var(--foreground);
 }
 
-/* BODY BASE */
 body {
-  background: var(--background);
-  color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
 
 /* ========================================= */
 /* 🌊 ANIMACIÓN PREMIUM — EFECTO LÍQUIDO     */
-/* ========================================= */
-/* → Versión intensa, visible y que deriva a tonos más oscuros */
 /* ========================================= */
 
 @keyframes liquidFlow {
@@ -46,7 +44,7 @@ body {
   50% {
     background-position: 120% 120%;
     transform: scale(1.25);
-    filter: blur(40px) brightness(0.75); /* más oscuro en el pico */
+    filter: blur(40px) brightness(0.75);
   }
   100% {
     background-position: 0% 0%;
@@ -57,13 +55,7 @@ body {
 
 .animate-liquidFlow {
   animation: liquidFlow 22s ease-in-out infinite;
-  opacity: 0.75;               /* Se nota más */
-  mix-blend-mode: screen;      /* Integra mejor el color con el fondo */
+  opacity: 0.60; /* ✅ menos intenso */
+  mix-blend-mode: screen;
   will-change: transform, filter, background-position;
 }
-
-/* Opciones:
-   – Más rápido:  animation: liquidFlow 15s ease-in-out infinite;
-   – Más suave:   animation: liquidFlow 35s ease-in-out infinite;
-   – Más intenso: subir opacity a 0.9;
-*/
