@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import { Bebas_Neue } from "next/font/google";
 
 const bebas = Bebas_Neue({
@@ -10,46 +9,8 @@ const bebas = Bebas_Neue({
 
 export default function Hero() {
   const VIDEO_ID = "h5QFFj_HwIk";
-  const [play, setPlay] = useState(false);
 
-  const origin = useMemo(() => {
-    if (typeof window === "undefined") return "";
-    return window.location.origin;
-  }, []);
-
-  // ✅ Desktop (md+) autoplay mute
-  const desktopSrc = useMemo(() => {
-    const params = new URLSearchParams({
-      autoplay: "1",
-      mute: "1",
-      controls: "1",
-      loop: "1",
-      playlist: VIDEO_ID,
-      modestbranding: "1",
-      rel: "0",
-      playsinline: "1",
-      origin: origin || "",
-      enablejsapi: "1",
-    });
-    return `https://www.youtube.com/embed/${VIDEO_ID}?${params.toString()}`;
-  }, [origin]);
-
-  // ✅ Móvil: solo reproduce cuando el usuario toca (play=true)
-  const mobileSrc = useMemo(() => {
-    const params = new URLSearchParams({
-      autoplay: play ? "1" : "0",
-      mute: "0", // en móvil mejor dejar con audio cuando el usuario toca
-      controls: "1",
-      loop: "1",
-      playlist: VIDEO_ID,
-      modestbranding: "1",
-      rel: "0",
-      playsinline: "1",
-      origin: origin || "",
-      enablejsapi: "1",
-    });
-    return `https://www.youtube.com/embed/${VIDEO_ID}?${params.toString()}`;
-  }, [origin, play]);
+  const src = `https://www.youtube.com/embed/${VIDEO_ID}?autoplay=1&mute=1&controls=1&loop=1&playlist=${VIDEO_ID}&modestbranding=1&rel=0&playsinline=1`;
 
   return (
     <section className="w-full px-4 pt-4 pb-6 md:pb-8 flex justify-center">
@@ -80,75 +41,14 @@ export default function Hero() {
               relative
             "
           >
-            {/* ✅ DESKTOP: iframe autoplay */}
             <iframe
-              className="hidden md:block absolute inset-0 w-full h-full"
-              src={desktopSrc}
+              className="absolute inset-0 w-full h-full"
+              src={src}
               title="10K Ruta de los Tres Juanes – Video"
-              allow="autoplay; encrypted-media; picture-in-picture"
+              allow="autoplay; encrypted-media; picture-in-picture; web-share"
               allowFullScreen
-              loading="lazy"
+              loading="eager"
             />
-
-            {/* ✅ MOBILE: portada + click para cargar iframe */}
-            {!play ? (
-              <button
-                type="button"
-                onClick={() => setPlay(true)}
-                className="
-                  md:hidden absolute inset-0 w-full h-full
-                  flex items-center justify-center
-                  bg-black/30
-                "
-                aria-label="Reproducir video"
-              >
-                {/* Miniatura YouTube */}
-                <img
-                  src={`https://i.ytimg.com/vi/${VIDEO_ID}/hqdefault.jpg`}
-                  alt="Video 10K Ruta de los Tres Juanes"
-                  className="absolute inset-0 w-full h-full object-cover opacity-85"
-                  loading="lazy"
-                />
-                {/* Overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/15 to-black/30" />
-
-                {/* Botón play */}
-                <div
-                  className="
-                    relative z-10
-                    w-20 h-20
-                    rounded-full
-                    bg-white/15
-                    border border-white/25
-                    backdrop-blur-sm
-                    flex items-center justify-center
-                    shadow-[0_18px_60px_rgba(0,0,0,0.55)]
-                  "
-                >
-                  <div
-                    className="
-                      w-0 h-0
-                      border-l-[18px] border-l-white
-                      border-y-[12px] border-y-transparent
-                      ml-1
-                    "
-                  />
-                </div>
-
-                <span className="relative z-10 mt-6 text-xs tracking-[0.32em] uppercase text-white/80">
-                  Toca para reproducir
-                </span>
-              </button>
-            ) : (
-              <iframe
-                className="md:hidden absolute inset-0 w-full h-full"
-                src={mobileSrc}
-                title="10K Ruta de los Tres Juanes – Video"
-                allow="autoplay; encrypted-media; picture-in-picture"
-                allowFullScreen
-                loading="lazy"
-              />
-            )}
           </div>
         </div>
 
