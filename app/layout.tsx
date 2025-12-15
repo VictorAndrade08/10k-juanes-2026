@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Montserrat } from "next/font/google";  // Agregar Montserrat
 import "./globals.css";
 
 import Header from "./components/Header";
@@ -24,8 +24,14 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const montserrat = Montserrat({
+  variable: "--font-montserrat", // Nueva fuente para los encabezados
+  subsets: ["latin"],
+  weight: ["700", "800", "900"],
+});
+
 // ==============================
-// Manifest opcional (no rompe si no existe)
+// Manifest opcional
 // ==============================
 function readManifest() {
   try {
@@ -35,9 +41,6 @@ function readManifest() {
   return null;
 }
 
-// ==============================
-// Hash del contenido como fallback (para ?v=HASH)
-// ==============================
 function fileHash(absPath: string) {
   try {
     const buf = readFileSync(absPath);
@@ -51,7 +54,6 @@ const manifest = readManifest();
 
 function cssHref(basename: string) {
   if (manifest && manifest[basename]) return "/" + manifest[basename];
-
   const abs = resolve(process.cwd(), "public/assets/css/" + basename);
   const v = fileHash(abs);
   return `/assets/css/${basename}?v=${v}`;
@@ -84,7 +86,7 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        {/* ✅ 0) Anti-blanco: fuerza dark ANTES de cargar CSS/React */}
+        {/* Anti-blanco */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -112,70 +114,48 @@ export default function RootLayout({
         className={`
           ${geistSans.variable}
           ${geistMono.variable}
+          ${montserrat.variable}  // Aplicar la nueva fuente
           antialiased
           min-h-screen
           text-white
-          bg-rtj-bg
+          bg-[#080B22]   /* ✅ Fondo oscuro */
           relative
           overflow-x-hidden
         `}
       >
         {/* 🌊 CAPA 1 — MANCHAS LÍQUIDAS */}
         <div
-          className="
-            fixed inset-0 -z-30
-            animate-liquidFlow
-            pointer-events-none
-          "
+          className="fixed inset-0 -z-30 animate-liquidFlow pointer-events-none"
           style={{
             backgroundImage: `
-              radial-gradient(circle at 18% 25%, rgba(255,120,190,0.80) 0%, transparent 55%),
-              radial-gradient(circle at 75% 35%, rgba(236,0,140,0.70) 0%, transparent 55%),
+              radial-gradient(circle at 18% 25%, rgba(255,120,190,0.8) 0%, transparent 55%),
+              radial-gradient(circle at 75% 35%, rgba(236,0,140,0.7) 0%, transparent 55%),
               radial-gradient(circle at 55% 85%, rgba(186,0,120,0.75) 0%, transparent 55%)
             `,
             backgroundSize: "230% 230%",
+            backgroundRepeat: "no-repeat",
+            backgroundPosition: "center",
             opacity: 0.65,
           }}
         />
 
-        {/* 🌌 CAPA 2 — FONDO BASE (FIX mobile + sin franja) */}
+        {/* 🌌 CAPA 2 — FONDO BASE (SIN FRANJA) */}
         <div
           className="fixed inset-0 -z-20 pointer-events-none"
           style={{
-            backgroundImage: `url("data:image/svg+xml;utf8,
-              <svg xmlns='http://www.w3.org/2000/svg' width='100%' height='100%'>
-                <defs>
-                  <linearGradient id='grad1' x1='0' y1='0' x2='1' y2='1'>
-                    <stop offset='0%' stop-color='%230A0512'/>
-                    <stop offset='45%' stop-color='%231A0630'/>
-                    <stop offset='75%' stop-color='%23B0007A'/>
-                    <stop offset='100%' stop-color='%23FF4F9A'/>
-                  </linearGradient>
-
-                  <filter id='noise'>
-                    <feTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='3'/>
-                    <feColorMatrix type='saturate' values='0'/>
-                    <feComponentTransfer>
-                      <feFuncA type='table' tableValues='0 0.14'/>
-                    </feComponentTransfer>
-                  </filter>
-                </defs>
-
-                <rect width='100%' height='100%' fill='url(%23grad1)' opacity='0.92'/>
-                <rect width='100%' height='100%' filter='url(%23noise)' opacity='0.16'/>
-              </svg>
-            ")`,
+            backgroundImage:
+              "linear-gradient(180deg, #080B22 0%, #0A0512 18%, #1A0630 45%, #B0007A 75%, #FF4F9A 100%)",
             backgroundRepeat: "no-repeat",
             backgroundSize: "cover",
             backgroundPosition: "center top",
-            backgroundColor: "#080B22", // ✅ rellena detrás del header
+            backgroundColor: "#080B22",
           }}
         />
 
         {/* HEADER */}
         <Header />
 
-        {/* ⭐ SONNER — Toaster Global */}
+        {/* TOASTER */}
         <Toaster position="top-center" richColors closeButton duration={2400} />
 
         {/* CONTENIDO */}

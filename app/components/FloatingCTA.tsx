@@ -1,56 +1,58 @@
-// app/components/FloatingCTA.tsx
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { Barlow_Condensed } from "next/font/google";
+
+const barlow = Barlow_Condensed({
+  subsets: ["latin"],
+  weight: ["700"],
+});
 
 export default function FloatingCTA() {
+  const pathname = usePathname();
+  const router = useRouter();
   const [visible, setVisible] = useState(false);
 
+  // ✅ No mostrar en /inscripcion
+  if (pathname?.startsWith("/inscripcion")) return null;
+
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const onScroll = () => {
-      const scrolled = window.scrollY > 400;
-      setVisible(scrolled);
-    };
-
-    window.addEventListener("scroll", onScroll);
-    onScroll();
-
-    return () => window.removeEventListener("scroll", onScroll);
+    // aparece 1s después del load (sin scroll)
+    const timer = setTimeout(() => setVisible(true), 1000);
+    return () => clearTimeout(timer);
   }, []);
-
-  if (!visible) return null;
 
   return (
     <button
-      onClick={() => {
-        window.location.href = "/inscripcion";
-      }}
-      className="
+      onClick={() => router.push("/inscripcion")}
+      className={`
+        ${barlow.className}
         fixed z-[9999]
-        right-5 bottom-5
-        md:right-8 md:bottom-8
+        left-1/2 -translate-x-1/2
+        bottom-[calc(env(safe-area-inset-bottom)+22px)]
+        md:left-auto md:right-10 md:translate-x-0
 
-        px-8 py-4
         rounded-full
-
-        text-white font-bold uppercase tracking-[0.20em]
-        text-[13px] md:text-[14px]
+        px-12 py-5 md:px-10 md:py-4
+        text-[20px] md:text-[18px]
+        uppercase tracking-[0.15em]
+        font-bold text-white
+        shadow-[0_0_35px_rgba(255,0,128,0.45)]
 
         bg-gradient-to-r from-[#FF0080] to-[#E5006D]
-        shadow-[0_0_25px_rgba(255,0,128,0.55)]
-        hover:shadow-[0_0_35px_rgba(255,0,128,0.75)]
+        hover:shadow-[0_0_50px_rgba(255,0,128,0.65)]
+        active:scale-95
+        transition-all duration-300
 
-        animate-cta-glow
-        animate-cta-bounce
-        transition-all duration-300 cursor-pointer
+        border border-white/10
+        backdrop-blur
 
-        md:w-auto
-        w-[90%] left-1/2 md:left-auto -translate-x-1/2 md:translate-x-0
-      "
+        ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-5"}
+        transition-transform duration-700 ease-out
+      `}
     >
-      Inscribirme ahora
+      Inscribirme
     </button>
   );
 }
