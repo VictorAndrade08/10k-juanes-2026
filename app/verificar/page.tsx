@@ -155,18 +155,40 @@ export default function VerificarPage() {
           )}
 
           {status === "success" && data && (
-            <div className="mt-6 grid sm:grid-cols-2 gap-3">
-              <Item label="Nombre" value={data.nombre} />
-              <Item label="Cédula" value={data.cedula} />
-              <Item label="Ciudad" value={data.ciudad} />
-              <Item label="Teléfono" value={data.celular} />
-              <Item label="Email" value={data.email} />
-              <Item label="Edad" value={data.edad} />
-              <Item label="Género" value={data.genero} />
-              <Item label="Categorías" value={data.categorias} />
-              <Item label="Valor" value={data.valor != null ? `$${data.valor}` : null} />
-              <Item label="Etapa" value={data.etapa} />
-            </div>
+            <>
+              {/* ✅ QR SOLO CON EL NÚMERO DE CÉDULA (NO JSON, NO TEXTO EXTRA) */}
+              <div className="mt-6 flex flex-col items-center gap-2">
+                <div className="text-sm text-gray-400">Código QR (tu cédula):</div>
+                <div className="bg-white p-3 rounded-xl">
+                  <img
+                    alt="QR de cédula"
+                    className="w-[180px] h-[180px]"
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
+                      String(data.cedula ?? cedulaClean ?? "")
+                    )}`}
+                  />
+                </div>
+                <div className="text-xs text-gray-500">
+                  {String(data.cedula ?? cedulaClean ?? "")}
+                </div>
+              </div>
+
+              <div className="mt-6 grid sm:grid-cols-2 gap-3">
+                <Item label="Nombre" value={data.nombre} />
+                <Item label="Cédula" value={data.cedula} />
+                <Item label="Ciudad" value={data.ciudad} />
+                <Item label="Teléfono" value={data.celular} />
+                <Item label="Email" value={data.email} />
+                <Item label="Edad" value={data.edad} />
+                <Item label="Género" value={data.genero} />
+                <Item label="Categorías" value={data.categorias} />
+                <Item
+                  label="Valor"
+                  value={data.valor != null ? `$${data.valor}` : null}
+                />
+                <Item label="Etapa" value={data.etapa} />
+              </div>
+            </>
           )}
         </div>
       </div>

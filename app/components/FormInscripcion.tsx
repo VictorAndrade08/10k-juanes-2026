@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, ChangeEvent, useRef, useEffect } from "react";
+import type React from "react";
 import { Barlow_Condensed } from "next/font/google";
 
 import {
@@ -26,6 +27,9 @@ export default function InscripcionPage() {
   const [loading, setLoading] = useState(false);
   const [slow, setSlow] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  const [whatsLink, setWhatsLink] = useState<string>("");
+  const [uploadedFileUrl, setUploadedFileUrl] = useState<string>("");
 
   const componentRef = useRef<HTMLDivElement | null>(null);
 
@@ -259,10 +263,11 @@ export default function InscripcionPage() {
         return;
       }
 
+      // Guardar URL del comprobante (por si quieres mostrarlo)
+      if (json?.file_url) setUploadedFileUrl(String(json.file_url));
+
       // ------------------------------
-      // Paso 2: Enviar a Airtable
-      // ✅ FIX: NO debe romper el flujo si falla (y NO uses secrets en frontend)
-      // Si quieres mantenerlo, usa NEXT_PUBLIC_* (no secrets) o mejor hazlo en el plugin WP.
+      // Paso 2: Enviar a Airtable (opcional)
       // ------------------------------
       try {
         const BASE = process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID;
@@ -313,7 +318,7 @@ export default function InscripcionPage() {
         console.warn("Airtable falló, pero WP ya guardó. Continuando…", e);
       }
 
-      // ✅ FIX: avanzamos sí o sí si WP fue success
+      // ✅ Paso 4: mostrar final (SIN redirección automática)
       setStep(4);
 
       const msg = `
@@ -332,19 +337,16 @@ export default function InscripcionPage() {
 🧾 Comprobante:
 ${json.file_url}
 
-⚠️ Favor confirmar mi inscripción.
+✅ Inscripción registrada. Solicito verificación del pago.
 `;
 
-      setTimeout(() => {
-        window.location.href = `https://wa.me/593995102378?text=${encodeURIComponent(
-          msg
-        )}`;
-      }, 600);
+      setWhatsLink(
+        `https://wa.me/593995102378?text=${encodeURIComponent(msg)}`
+      );
     } catch (err) {
       console.error(err);
       setLoading(false);
       setSlow(false);
-      clearTimeout(slowTimer);
       alert("Error de conexión");
     }
 
@@ -415,7 +417,7 @@ ${json.file_url}
           {/* loading */}
           {loading && (
             <div className="fixed inset-0 bg-black/70 z-50 flex flex-col items-center justify-center gap-4">
-              <div className="animate-spin w-16 h-16 border-4 border-gray-600 border-t-white rounded-full"></div>
+              <div className="animate-spin w-16 h-16 border-4 border-gray-600 border-t-white rounded-full" />
               {slow && (
                 <p className="text-sm text-gray-300 animate-pulse">
                   Procesando comprobante…
@@ -466,7 +468,12 @@ ${json.file_url}
               <div className="flex flex-col gap-4">
                 {(
                   [
-                    ["cedula", "Cédula o Pasaporte", <HiIdentification key="i1" />, "number"],
+                    [
+                      "cedula",
+                      "Cédula o Pasaporte",
+                      <HiIdentification key="i1" />,
+                      "number",
+                    ],
                     ["nombres", "Nombres", <HiUserCircle key="i2" />, "text"],
                     ["apellidos", "Apellidos", <HiUserCircle key="i3" />, "text"],
                     ["ciudad", "Ciudad", <HiUserCircle key="i4" />, "text"],
@@ -560,7 +567,10 @@ ${json.file_url}
 
               <div
                 className="p-6 rounded-xl mb-10 space-y-6"
-                style={{ background: "#11141A", border: `1px solid ${brandPink}40` }}
+                style={{
+                  background: "#11141A",
+                  border: `1px solid ${brandPink}40`,
+                }}
               >
                 <div>
                   <p className="text-gray-200 text-base leading-relaxed">
@@ -623,7 +633,9 @@ ${json.file_url}
                   onClick={submitForm}
                   disabled={submitting}
                   className={`px-6 py-2 rounded-md font-semibold ${
-                    submitting ? "bg-gray-500 cursor-not-allowed" : "bg-white text-black"
+                    submitting
+                      ? "bg-gray-500 cursor-not-allowed"
+                      : "bg-white text-black"
                   }`}
                 >
                   {submitting ? "Enviando..." : "Finalizar inscripción"}
@@ -634,15 +646,101 @@ ${json.file_url}
 
           {/* STEP 4 */}
           {step === 4 && (
-            <div className="text-center py-20">
+            <div className="text-center py-16">
               <h2 className={`${display.className} text-4xl mb-4`}>
-                🎉 Inscripción enviada
+                ✅ Inscripción registrada
               </h2>
-              <p className="text-gray-400">
-                Gracias <strong>{formData.nombres}</strong>
-                <br />
-                Serás redirigido a WhatsApp…
+
+              <p className="text-gray-300 max-w-xl mx-auto leading-relaxed">
+                Listo <strong>{formData.nombres}</strong>. Tu inscripción ya quedó{" "}
+                <strong>guardada</strong>. <br />
+                La <strong>verificación del pago</strong> puede tardar unos días, pero
+                tu cupo ya está <strong>en proceso</strong>.
               </p>
+
+              {/* Resumen */}
+              <div
+                className="mt-8 max-w-xl mx-auto text-left rounded-2xl p-5"
+                style={{
+                  background: "#11141A",
+                  border: "1px solid rgba(255,255,255,0.10)",
+                }}
+              >
+                <p className="text-sm text-gray-400 mb-3">Estos son tus datos:</p>
+                <div className="text-gray-200 text-sm leading-relaxed space-y-1">
+                  <div>
+                    <strong>Nombre:</strong> {formData.nombres} {formData.apellidos}
+                  </div>
+                  <div>
+                    <strong>Cédula/Documento:</strong> {formData.cedula}
+                  </div>
+                  <div>
+                    <strong>Teléfono:</strong> {formData.telefono}
+                  </div>
+                  <div>
+                    <strong>Email:</strong> {formData.email}
+                  </div>
+                  <div>
+                    <strong>Ciudad:</strong> {formData.ciudad}
+                  </div>
+                  <div>
+                    <strong>Edad:</strong> {formData.edad} — <strong>Género:</strong>{" "}
+                    {formData.genero}
+                  </div>
+                  <div className="pt-2">
+                    <strong>Categoría:</strong> {selectedCategory}
+                    <br />
+                    <strong>Valor:</strong> ${selectedPrice}
+                  </div>
+
+                  {uploadedFileUrl ? (
+                    <div className="pt-2 text-gray-400">
+                      <span className="text-gray-300 font-semibold">Comprobante:</span>{" "}
+                      subido correctamente.
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              {/* QR (solo cédula) */}
+              <div className="mt-8 flex flex-col items-center gap-2">
+                <div className="text-sm text-gray-400">
+                  Código QR (tu cédula):
+                </div>
+                <div className="bg-white p-3 rounded-xl">
+                  <img
+                    alt="QR de cédula"
+                    className="w-[180px] h-[180px]"
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
+                      formData.cedula || ""
+                    )}`}
+                  />
+                </div>
+                <div className="text-xs text-gray-500">{formData.cedula}</div>
+              </div>
+
+              {/* WhatsApp opcional */}
+              <div className="mt-10 flex flex-col items-center gap-3">
+                <a
+                  href={whatsLink || "#"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`px-6 py-3 rounded-full font-semibold transition ${
+                    whatsLink
+                      ? "bg-white text-black hover:opacity-90"
+                      : "bg-gray-700 text-gray-300 cursor-not-allowed"
+                  }`}
+                  onClick={(e) => {
+                    if (!whatsLink) e.preventDefault();
+                  }}
+                >
+                  Enviar mensaje por WhatsApp (opcional)
+                </a>
+                <p className="text-xs text-gray-500 max-w-md">
+                  Si deseas, puedes escribirnos para acelerar la revisión. Tu inscripción
+                  ya está registrada.
+                </p>
+              </div>
             </div>
           )}
         </div>
