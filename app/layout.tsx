@@ -97,7 +97,7 @@ export default function RootLayout({
           }}
         />
 
-        <meta name="theme-color" content="#05071A" />
+        <meta name="theme-color" content="#080B22" />
         <meta name="color-scheme" content="dark" />
         <link rel="icon" href="/favicon.ico" />
 
@@ -138,9 +138,9 @@ export default function RootLayout({
           }}
         />
 
-        {/* 🌌 CAPA 2 — FONDO BASE */}
+        {/* 🌌 CAPA 2 — FONDO BASE (FIX mobile + sin franja) */}
         <div
-          className="fixed inset-0 -z-20 pointer-events-none bg-fixed"
+          className="fixed inset-0 -z-20 pointer-events-none"
           style={{
             backgroundImage: `url("data:image/svg+xml;utf8,
               <svg xmlns='http://www.w3.org/2000/svg' width='100%' height='100%'>
@@ -161,10 +161,14 @@ export default function RootLayout({
                   </filter>
                 </defs>
 
-                <rect width='100%' height='100%' fill='url(%23grad1)' opacity='0.98'/>
-                <rect width='100%' height='100%' filter='url(%23noise)' opacity='0.22'/>
+                <rect width='100%' height='100%' fill='url(%23grad1)' opacity='0.92'/>
+                <rect width='100%' height='100%' filter='url(%23noise)' opacity='0.16'/>
               </svg>
             ")`,
+            backgroundRepeat: "no-repeat",
+            backgroundSize: "cover",
+            backgroundPosition: "center top",
+            backgroundColor: "#080B22", // ✅ rellena detrás del header
           }}
         />
 

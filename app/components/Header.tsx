@@ -15,7 +15,8 @@ export default function Header() {
   return (
     <>
       {/* ================= HEADER ================= */}
-      <header className="sticky top-3 z-50 w-full flex justify-center px-4">
+      {/* ✅ NUNCA sticky en ningún dispositivo */}
+      <header className="relative mt-4 sm:mt-5 z-50 w-full flex justify-center px-4">
         <div
           className="
             w-full max-w-7xl mx-auto
@@ -42,7 +43,6 @@ export default function Header() {
                 flex-shrink-0
               "
             >
-              {/* ✅ IMG NATIVO (FIX iOS) */}
               <img
                 src="/white.svg"
                 alt="10K Ruta de los Tres Juanes"
@@ -156,15 +156,23 @@ export default function Header() {
               <button
                 onClick={() => setOpen(false)}
                 className="p-2 rounded-full hover:bg-white/10 transition"
+                aria-label="Cerrar menú"
               >
                 <HiXMark className="w-7 h-7 text-white" />
               </button>
             </div>
 
             <nav className="flex flex-col gap-6">
-              <a href="/" className="text-xl font-semibold">Inicio</a>
-              <a href="#reglamento" className="text-xl font-semibold">Reglamento</a>
-              <a href="/verificar" className="text-xl font-semibold text-[#C02485]">
+              <a href="/" className="text-xl font-semibold">
+                Inicio
+              </a>
+              <a href="#reglamento" className="text-xl font-semibold">
+                Reglamento
+              </a>
+              <a
+                href="/verificar"
+                className="text-xl font-semibold text-[#C02485]"
+              >
                 Verificar inscripción
               </a>
               <a
