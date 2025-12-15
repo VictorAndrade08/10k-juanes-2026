@@ -56,7 +56,7 @@ export default function CountdownStrip() {
       >
         {/* Encabezado */}
         <p className="text-xs sm:text-sm tracking-[0.32em] uppercase text-white/55 font-semibold">
-          Presentado por Vehicentro
+          Presentado por APDT Ambato
         </p>
 
         {/* TÍTULO */}
@@ -69,14 +69,15 @@ export default function CountdownStrip() {
             ${bebas.className}
           `}
         >
-          Cuenta regresiva para la  
+          Cuenta regresiva para la
           <br />
           10K Ruta de los Tres Juanes 2026
         </h2>
 
         {/* Subtítulo */}
         <p className="mt-4 text-base sm:text-lg text-white/80 max-w-2xl">
-          Viernes 6 de febrero de 2026 · 19h00 · Ambato, Ecuador  
+          Viernes 6 de febrero de 2026 · 19h00 · Ambato, Ecuador
+          <br />
           Revisa el tiempo restante y organiza tu entrenamiento.
         </p>
 

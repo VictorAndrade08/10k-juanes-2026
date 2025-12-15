@@ -47,15 +47,7 @@ export default function ReglamentoSection() {
           Aquí va el contenido completo del reglamento: denominación del evento,
           fecha, horarios, requisitos de participación, categorías oficiales,
           seguridad, logística, recorrido, responsabilidades y todos los
-          artículos necesarios para la carrera. Puedes dividirlo con subtítulos
-          para facilitar la lectura a deportistas y medios de comunicación.
-        </p>
-
-        {/* TIP (ESPACIADO AJUSTADO) */}
-        <p className="text-sm text-white/55 mb-6 max-w-4xl leading-relaxed">
-          Consejo: en producción, cada artículo puede tener un encabezado{" "}
-          <strong>&lt;h4&gt;</strong> y listas <strong>&lt;ul&gt;</strong> para
-          que el reglamento sea más claro y fácil de consultar.
+          artículos necesarios para la carrera.
         </p>
 
         {/* CTA */}
@@ -78,10 +70,6 @@ export default function ReglamentoSection() {
           >
             Ver reglamento completo
           </a>
-
-          <span className="text-xs text-white/40">
-            * Enlace temporal. Reemplázalo por el PDF final.
-          </span>
         </div>
       </div>
     </section>

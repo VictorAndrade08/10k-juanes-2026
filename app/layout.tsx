@@ -79,9 +79,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es">
+    <html lang="es" className="dark" style={{ colorScheme: "dark" }}>
       <head>
         <meta name="theme-color" content="#0b0b12" />
+        <meta name="color-scheme" content="dark" />
         <link rel="icon" href="/favicon.ico" />
         <link rel="preload" as="style" href={styleHref} />
         <link rel="stylesheet" href={styleHref} />
