@@ -1,18 +1,50 @@
 "use client";
 
+import { useCallback } from "react";
 import { Bebas_Neue } from "next/font/google";
-import { toast } from "sonner";
 import { Map, Users, Package, PartyPopper } from "lucide-react";
 
 const bebas = Bebas_Neue({
   subsets: ["latin"],
   weight: "400",
+  display: "swap",
+  preload: true,
 });
 
+const CARDS = [
+  {
+    Icon: Map,
+    title: "La Ruta de la Carrera",
+    text: "Conoce cada tramo del recorrido nocturno por Ambato.",
+    cta: "Ver ruta",
+  },
+  {
+    Icon: Users,
+    title: "Categorías disponibles",
+    text: "ELITE PRO, Juvenil, Senior, Master, Supermaster, Vilcabambas, Colegial y más.",
+    cta: "Ver categorías",
+  },
+  {
+    Icon: Package,
+    title: "El mejor kit deportivo",
+    text: "Camiseta oficial, medalla, chip, medias, Sporty bag, hidratación y más.",
+    cta: "Ver kit completo",
+  },
+  {
+    Icon: PartyPopper,
+    title: "Fiesta, ciudad & ambiente",
+    text: "La carrera se integra a la Fiesta de la Fruta y de las Flores: luces, música y tradición.",
+    cta: "Ver más del evento",
+  },
+] as const;
+
 export default function ExperienceSection() {
-  const handleCTA = () => {
-    toast.info("Próximamente — Estate atento 👀");
-  };
+  // ✅ Sonner lazy (no entra al bundle inicial)
+  const handleCTA = useCallback(() => {
+    import("sonner").then(({ toast }) => {
+      toast.info("Próximamente — Estate atento 👀");
+    });
+  }, []);
 
   return (
     <section className="w-full px-4 pt-4 pb-6 md:pb-8 flex justify-center">
@@ -28,7 +60,6 @@ export default function ExperienceSection() {
           border border-white/10
         "
       >
-        {/* TÍTULO */}
         <h2
           className={`
             mb-14
@@ -41,39 +72,10 @@ export default function ExperienceSection() {
           Explora la experiencia 10K Ruta de los Tres Juanes
         </h2>
 
-        {/* GRID */}
         <div className="grid gap-8 md:gap-10 md:grid-cols-2 lg:grid-cols-4">
-          {[
-            {
-              icon: <Map className="w-14 h-14 text-white/70" />,
-              title: "La Ruta de la Carrera",
-              text: "Conoce cada tramo del recorrido nocturno por Ambato.",
-              cta: "Ver ruta",
-            },
-            {
-              icon: <Users className="w-14 h-14 text-white/70" />,
-              title: "Categorías disponibles",
-              text:
-                "ELITE PRO, Juvenil, Senior, Master, Supermaster, Vilcabambas, Colegial y más.",
-              cta: "Ver categorías",
-            },
-            {
-              icon: <Package className="w-14 h-14 text-white/70" />,
-              title: "El mejor kit deportivo",
-              text:
-                "Camiseta oficial, medalla, chip, medias, Sporty bag, hidratación y más.",
-              cta: "Ver kit completo",
-            },
-            {
-              icon: <PartyPopper className="w-14 h-14 text-white/70" />,
-              title: "Fiesta, ciudad & ambiente",
-              text:
-                "La carrera se integra a la Fiesta de la Fruta y de las Flores: luces, música y tradición.",
-              cta: "Ver más del evento",
-            },
-          ].map((card, i) => (
+          {CARDS.map(({ Icon, title, text, cta }) => (
             <article
-              key={i}
+              key={title}
               className="
                 rounded-[32px]
                 overflow-hidden
@@ -88,7 +90,7 @@ export default function ExperienceSection() {
               "
             >
               <div className="flex items-center justify-center h-[140px] bg-white/10">
-                {card.icon}
+                <Icon className="w-14 h-14 text-white/70" aria-hidden="true" />
               </div>
 
               <div className="p-8 flex flex-col flex-1 justify-between">
@@ -96,15 +98,16 @@ export default function ExperienceSection() {
                   <h3
                     className={`${bebas.className} text-[24px] sm:text-[28px] mb-2 tracking-[0.02em]`}
                   >
-                    {card.title}
+                    {title}
                   </h3>
 
                   <p className="text-sm sm:text-base text-white/75 leading-relaxed">
-                    {card.text}
+                    {text}
                   </p>
                 </div>
 
                 <button
+                  type="button"
                   onClick={handleCTA}
                   className="
                     mt-6 text-[11px]
@@ -112,14 +115,21 @@ export default function ExperienceSection() {
                     tracking-[0.30em]
                     text-white/80 hover:text-white
                     transition
+                    focus:outline-none focus-visible:ring-2 focus-visible:ring-white/35
                   "
                 >
-                  {card.cta}
+                  {cta}
                 </button>
               </div>
             </article>
           ))}
         </div>
+
+        <style>{`
+          @media (prefers-reduced-motion: reduce) {
+            article, button { transition: none !important; }
+          }
+        `}</style>
       </div>
     </section>
   );

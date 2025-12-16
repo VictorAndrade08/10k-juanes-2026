@@ -1,10 +1,10 @@
-"use client";
-
+import Image from "next/image";
 import { Bebas_Neue } from "next/font/google";
 
 const bebas = Bebas_Neue({
   subsets: ["latin"],
   weight: "400",
+  display: "swap",
 });
 
 export default function Footer() {
@@ -35,12 +35,14 @@ export default function Footer() {
               flex items-center justify-center
               shadow-[0_12px_30px_rgba(192,36,133,0.35)]
             "
+            aria-hidden="true"
           >
-            <img
+            <Image
               src="/white.svg"
               alt="10K Ruta de los Tres Juanes"
-              className="w-10 h-10 object-contain"
-              loading="eager"
+              width={40}
+              height={40}
+              className="object-contain"
             />
           </div>
 
@@ -65,7 +67,10 @@ export default function Footer() {
         </div>
 
         {/* DERECHA — ENLACES */}
-        <div className="flex-[1.2] grid grid-cols-1 sm:grid-cols-3 gap-8 text-sm">
+        <nav
+          className="flex-[1.2] grid grid-cols-1 sm:grid-cols-3 gap-8 text-sm"
+          aria-label="Enlaces del sitio"
+        >
           {/* Enlaces */}
           <div>
             <h4
@@ -130,6 +135,8 @@ export default function Footer() {
                   href="https://wa.me/593995040437"
                   className="hover:text-white transition"
                   target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Abrir WhatsApp"
                 >
                   WhatsApp
                 </a>
@@ -139,6 +146,8 @@ export default function Footer() {
                   href="https://instagram.com"
                   className="hover:text-white transition"
                   target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Abrir Instagram"
                 >
                   Instagram
                 </a>
@@ -148,13 +157,15 @@ export default function Footer() {
                   href="https://facebook.com"
                   className="hover:text-white transition"
                   target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Abrir Facebook"
                 >
                   Facebook
                 </a>
               </li>
             </ul>
           </div>
-        </div>
+        </nav>
       </div>
     </footer>
   );

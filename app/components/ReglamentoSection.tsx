@@ -3,6 +3,8 @@ import { Bebas_Neue } from "next/font/google";
 const bebas = Bebas_Neue({
   subsets: ["latin"],
   weight: "400",
+  display: "swap",
+  preload: true,
 });
 
 export default function ReglamentoSection() {
@@ -62,12 +64,19 @@ export default function ReglamentoSection() {
               hover:opacity-90
               transition
               shadow-lg shadow-[#C02485]/35
+              focus:outline-none focus-visible:ring-2 focus-visible:ring-white/35
             "
           >
             Ver reglamento completo
           </a>
         </div>
       </div>
+
+      <style>{`
+        @media (prefers-reduced-motion: reduce) {
+          a { transition: none !important; }
+        }
+      `}</style>
     </section>
   );
 }

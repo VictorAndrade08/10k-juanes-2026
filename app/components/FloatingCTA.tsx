@@ -7,25 +7,36 @@ import { Barlow_Condensed } from "next/font/google";
 const barlow = Barlow_Condensed({
   subsets: ["latin"],
   weight: ["700"],
+  display: "swap",
 });
 
 export default function FloatingCTA() {
   const pathname = usePathname();
   const router = useRouter();
+
   const [visible, setVisible] = useState(false);
 
-  // ✅ No mostrar en /inscripcion
-  if (pathname?.startsWith("/inscripcion")) return null;
+  const hiddenOnThisRoute = pathname?.startsWith("/inscripcion") ?? false;
 
   useEffect(() => {
-    // aparece 1s después del load (sin scroll)
-    const timer = setTimeout(() => setVisible(true), 1000);
-    return () => clearTimeout(timer);
-  }, []);
+    // si estamos en /inscripcion, asegura oculto y no programes nada
+    if (hiddenOnThisRoute) {
+      setVisible(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => setVisible(true), 1000);
+    return () => window.clearTimeout(timer);
+  }, [hiddenOnThisRoute]);
+
+  // ✅ el return null va DESPUÉS de los hooks (ya no rompe reglas)
+  if (hiddenOnThisRoute) return null;
 
   return (
     <button
+      type="button"
       onClick={() => router.push("/inscripcion")}
+      aria-label="Ir a inscripción"
       className={`
         ${barlow.className}
         fixed z-[9999]
@@ -38,18 +49,17 @@ export default function FloatingCTA() {
         text-[20px] md:text-[18px]
         uppercase tracking-[0.15em]
         font-bold text-white
-        shadow-[0_0_35px_rgba(255,0,128,0.45)]
 
         bg-gradient-to-r from-[#FF0080] to-[#E5006D]
-        hover:shadow-[0_0_50px_rgba(255,0,128,0.65)]
-        active:scale-95
-        transition-all duration-300
-
         border border-white/10
         backdrop-blur
 
+        shadow-[0_0_35px_rgba(255,0,128,0.45)]
+        hover:shadow-[0_0_50px_rgba(255,0,128,0.65)]
+        active:scale-95
+
+        transition-[opacity,transform,box-shadow] duration-500 ease-out
         ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-5"}
-        transition-transform duration-700 ease-out
       `}
     >
       Inscribirme

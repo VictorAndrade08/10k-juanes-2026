@@ -6,6 +6,8 @@ import { Trophy } from "lucide-react";
 const bebas = Bebas_Neue({
   subsets: ["latin"],
   weight: "400",
+  display: "swap",
+  preload: true,
 });
 
 export default function FeaturedStories() {
@@ -33,10 +35,10 @@ export default function FeaturedStories() {
               ${bebas.className}
             `}
           >
-            Noticias & Historias Destacadas
+            Noticias &amp; Historias Destacadas
           </h2>
 
-          <div className="hidden sm:flex items-center gap-2">
+          <div className="hidden sm:flex items-center gap-2" aria-hidden="true">
             <span className="h-3.5 w-3.5 rounded-full bg-white" />
             <span className="h-3.5 w-3.5 rounded-full bg-white/40" />
             <span className="h-3.5 w-3.5 rounded-full bg-white/40" />
@@ -44,7 +46,7 @@ export default function FeaturedStories() {
         </div>
 
         {/* TARJETA PRINCIPAL */}
-        <div
+        <article
           className="
             rounded-[40px]
             bg-white/[0.07]
@@ -93,10 +95,17 @@ export default function FeaturedStories() {
               border border-white/15
               flex items-center justify-center
             "
+            aria-hidden="true"
           >
             <Trophy className="w-24 h-24 text-white/65" strokeWidth={1.6} />
           </div>
-        </div>
+        </article>
+
+        <style>{`
+          @media (prefers-reduced-motion: reduce) {
+            article { transition: none !important; }
+          }
+        `}</style>
       </div>
     </section>
   );

@@ -1,11 +1,13 @@
 "use client";
 
-import { toast } from "sonner";
+import { useCallback } from "react";
 import { Bebas_Neue } from "next/font/google";
 
 const bebas = Bebas_Neue({
   subsets: ["latin"],
   weight: "400",
+  display: "swap",
+  preload: true,
 });
 
 const ITEMS = [
@@ -29,10 +31,14 @@ const ITEMS = [
     desc: "Oportunidades de visibilidad, activaciones y cobertura para marcas y medios de comunicación.",
     cta: "Ver dossier",
   },
-];
+] as const;
 
 export default function InfoBeforeRace() {
-  const comingSoon = () => toast.info("Próximamente — Estate atento 👀");
+  // ✅ No importamos sonner arriba → baja JS inicial
+  const comingSoon = useCallback(async () => {
+    const mod = await import("sonner");
+    mod.toast.info("Próximamente — Estate atento 👀");
+  }, []);
 
   return (
     <section className="w-full flex justify-center px-4 mt-4 md:mt-6">
@@ -75,7 +81,7 @@ export default function InfoBeforeRace() {
           </h2>
         </div>
 
-        {/* Cards (alineadas) */}
+        {/* Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 sm:gap-6 items-stretch">
           {ITEMS.map((it) => (
             <button
@@ -93,6 +99,7 @@ export default function InfoBeforeRace() {
                 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/35
                 flex flex-col
                 min-h-[300px] sm:min-h-[320px]
+                will-change-transform
               "
             >
               <h3
@@ -111,7 +118,6 @@ export default function InfoBeforeRace() {
                 {it.desc}
               </p>
 
-              {/* CTA más grande */}
               <span
                 className={`
                   ${bebas.className}
@@ -128,6 +134,13 @@ export default function InfoBeforeRace() {
             </button>
           ))}
         </div>
+
+        {/* ✅ Reduce motion (mejor Lighthouse) */}
+        <style>{`
+          @media (prefers-reduced-motion: reduce) {
+            .group { transition: none !important; }
+          }
+        `}</style>
       </div>
     </section>
   );
