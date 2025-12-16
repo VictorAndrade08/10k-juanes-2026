@@ -1,0 +1,737 @@
+"use client";
+
+import React from "react";
+import { Bebas_Neue } from "next/font/google";
+
+const bebas = Bebas_Neue({
+  subsets: ["latin"],
+  weight: "400",
+});
+
+export default function ReglamentoSection() {
+  return (
+    <section
+      id="reglamento"
+      className="w-full px-4 py-10 md:py-14 flex justify-center"
+    >
+      {/* ✅ MISMO ANCHO QUE EL HEADER */}
+      <div
+        className="
+          w-full max-w-7xl mx-auto
+          bg-white
+          rounded-[48px]
+          border border-black/10
+          shadow-[0_20px_60px_rgba(0,0,0,0.12)]
+          px-6 sm:px-10 md:px-16
+          py-12 md:py-16
+          text-black
+        "
+      >
+        {/* HEADER */}
+        <div className="text-center">
+          <p className="uppercase tracking-[0.32em] text-xs sm:text-sm text-black/60 font-semibold">
+            Información oficial — lectura clara y accesible
+          </p>
+
+          <h2
+            className={`
+              mt-4
+              text-[40px] sm:text-[54px] lg:text-[66px]
+              leading-[1.02]
+              uppercase tracking-[0.08em]
+              ${bebas.className}
+            `}
+          >
+            Reglamento General
+          </h2>
+
+          <p className="mt-3 text-black/70 max-w-3xl mx-auto text-[15px] sm:text-[16px] leading-relaxed">
+            Carrera 10K Ruta de los Tres Juanes 2026 — “10K RUTA DE LOS TRES
+            JUANES”
+          </p>
+
+          {/* ✅ QUITADO: chips (fecha/tiempo/precio/inscripción) */}
+        </div>
+
+        {/* BODY (✅ TODO ABIERTO, ✅ SIN ÍNDICE, ✅ SIN “ABRIR/CERRAR”, ✅ SIN IMPRIMIR) */}
+        <div className="mt-12 space-y-6 text-[17px] sm:text-[18px] leading-[1.9] text-black/85">
+          <ArticleCard id="art-1" title="Artículo 1. Denominación">
+            <p>
+              La competencia atlética 10k Ruta de los Tres Juanes está organizada
+              por la Asociación de Periodistas Deportivos de Tungurahua, con la
+              colaboración del Gobierno Autónomo Descentralizado de Ambato. Para
+              la realización de esta edición el nombre de la competencia será:
+              10k RUTA DE LOS TRES JUANES.
+            </p>
+          </ArticleCard>
+
+          <ArticleCard id="art-2" title="Artículo 2. Horario">
+            <p>
+              La edición de la 10k Ruta de los Tres Juanes se realizará el día,{" "}
+              <strong>viernes 6 de febrero de 2026 a las 19H00</strong> y el
+              tiempo máximo para completar esta prueba es de{" "}
+              <strong>1 hora 30 minutos</strong>.
+            </p>
+          </ArticleCard>
+
+          <ArticleCard id="art-3" title="Artículo 3. Participación">
+            <div className="space-y-3">
+              <p>
+                Podrán formar parte de esta prueba atlética todas las personas
+                que adjudiquen buena salud y que estén correctamente inscritas
+                tanto en tiempo como en forma.
+              </p>
+              <p>
+                Los Atletas extranjeros que deseen participar en este evento, NO
+                cobrarán los premios establecidos para los ganadores. Deberán
+                ponerse en CONTACTO con la organización para ponerse de acuerdo
+                con el Valor del Premio a recibir de acuerdo a su ubicación.
+              </p>
+              <p>
+                En la categoría Colegial – Tungurahua, podrán participar los
+                atletas que estudien en cualquiera de los Colegios de la
+                Provincia de Tungurahua de acuerdo a la edad establecida y que
+                presenten su carnet estudiantil vigente.
+              </p>
+              <p>
+                Los Atletas con Discapacidad deben presentar su Carnet emitido
+                por el CONADIS que acredite su grado de discapacidad.
+              </p>
+              <p>
+                La categoría Interfuerzas deberán presentar el Carnet de FFAA o
+                la entidad afín a la que representan.
+              </p>
+            </div>
+          </ArticleCard>
+
+          <ArticleCard id="art-4" title="Artículo 4. Distancia y recorrido">
+            <p>
+              10 kilómetros comprendidos en el siguiente recorrido: Partida
+              desde el Sector La Victoria, Rodrigo Pachano, Av. Circunvalación,
+              Jardín Botánico La Liria, Quinta De Juan León Mera, Colegio
+              Rumiñahui, IESS, Fybeca, Av. Los Guaytambos, Centro Comercial
+              Caracol, Ficoa, Parque los Quindes, Las Palmas, Quinta Juan
+              Montalvo, Club Tungurahua, Miraflores, Las Dalias, Olmedo,
+              Francisco Flor, Av. Cevallos, Mera, Urdaneta y La Llegada en el
+              Estadio Bellavista.
+            </p>
+          </ArticleCard>
+
+          <ArticleCard id="art-5" title="Artículo 5. Categorías">
+            <div className="space-y-4">
+              <p>
+                La carrera está abierta a la participación de cualquier atleta
+                que lo desee, sin distinción de sexo, nacionalidad, que se haya
+                inscrito correctamente en la misma.
+              </p>
+
+              <div className="grid sm:grid-cols-2 gap-2 text-black/85">
+                <div>ELITE — DAMAS Y VARONES</div>
+                <div>JUVENIL — DAMAS Y VARONES (Hasta 19 años 11 meses)</div>
+                <div>SENIOR 1 — DAMAS Y VARONES (De 20 a 29 años 11 meses)</div>
+                <div>SENIOR 2 — DAMAS Y VARONES (De 30 a 39 años 11 meses)</div>
+                <div>MASTER — DAMAS Y VARONES (De 40 a 49 años 11 meses)</div>
+                <div>SUPERMASTER — DAMAS Y VARONES (De 50 a 59 años 11 meses)</div>
+                <div>VILCABAMBAS — DAMAS Y VARONES (De 60 años en adelante)</div>
+                <div>COLEGIAL — DAMAS Y VARONES (De 14 a 18 años 11 meses)</div>
+                <div className="sm:col-span-2">
+                  CAPACIDADES ESPECIALES — Discapacidad intelectual y visual /
+                  Silla de Calle
+                </div>
+                <div className="sm:col-span-2">INTERFUERZAS</div>
+              </div>
+
+              <p className="text-black/70">
+                Los límites de edad para cada categoría se toman en cuenta de
+                acuerdo al año de nacimiento.
+              </p>
+            </div>
+          </ArticleCard>
+
+          <ArticleCard id="art-6" title="Artículo 6. Inscripciones">
+            <div className="space-y-3">
+              <p>
+                <strong>Precio de Inscripción:</strong> $30.00 USD (todas las
+                categorías).
+              </p>
+              <p>
+                Para las personas de la Tercera Edad y personas con Discapacidad
+                el precio es de <strong>$20.00 USD</strong>.
+              </p>
+              <p>
+                Las inscripciones se las receptará a partir del día{" "}
+                <strong>lunes 20 de enero</strong>{" "}
+                <strong>hasta el 30 de enero de 2026 o hasta agotar cupos</strong>{" "}
+                determinados por la organización. No se admitirá inscripciones
+                el día de la Carrera Atlética.
+              </p>
+              <p>
+                <strong>IMPORTANTE:</strong> Indispensable presentar copia a
+                color de Cedula de Ciudadanía.
+              </p>
+            </div>
+          </ArticleCard>
+
+          <ArticleCard id="art-7" title="Artículo 7. Puntos de Inscripción">
+            <p>
+              Las inscripciones se realizarán de manera digital a través de
+              nuestro Whatsapp: <strong>+593 99 510 2378</strong>.
+            </p>
+          </ArticleCard>
+
+          <ArticleCard id="art-8" title="Artículo 8. Modificaciones">
+            <p>
+              La organización se reserva el derecho a realizar las
+              modificaciones en el itinerario que considere necesarias en
+              función de los diferentes condicionantes, así como la suspensión
+              de la carrera si las condiciones epidemiológicas u otras fuerzas
+              de causa mayor así lo aconsejan, posponiéndose en este caso para
+              otra fecha, sin que esto signifique la devolución de los valores
+              recaudados por concepto de inscripción.
+            </p>
+          </ArticleCard>
+
+          <ArticleCard id="art-9" title="Artículo 9. Atención Médica">
+            <p>
+              Además de contar con la asistencia médica de la Cruz Roja de
+              Tungurahua, los atletas contarán con un seguro de vida y
+              accidentes en horario de 19:00 a 21:00, proporcionado por Sweaden
+              Compañía de Seguros.
+            </p>
+          </ArticleCard>
+
+          <ArticleCard id="art-10" title="Artículo 10. Clasificaciones">
+            <p>
+              La clasificación general de los participantes se publicará en la
+              página oficial de la carrera{" "}
+              <strong>www.10krutadelostresjuanes.com.ec</strong>
+            </p>
+          </ArticleCard>
+
+          <ArticleCard
+            id="art-11"
+            title="Artículo 11. Descalificaciones e infracciones"
+          >
+            <div className="space-y-4">
+              <p>
+                En el caso de detectarse suplantación de identidad u otra forma
+                que alteraré su identidad causando o intentado perjudicar a la
+                organización, la sanción será de 5 años de no inscripción en
+                nuestra compentencia.
+              </p>
+              <p>
+                La organización se reserva el derecho de admisión de
+                inscripciones, con atletas que hayan calumniado, difamado,
+                injuriado, insultado o tenido un mal comportamiento con
+                cualquiera de sus miembros, vía oral, escrita o medios
+                digitales.
+              </p>
+
+              <div className="rounded-2xl border border-black/10 bg-black/[0.03] p-5">
+                <p className="font-semibold mb-2">
+                  El servicio médico de la competencia y los jueces están
+                  facultados para retirar durante la prueba:
+                </p>
+                <ul className="list-disc pl-6 space-y-1 text-black/85">
+                  <li>A cualquier atleta que manifieste mal estado físico</li>
+                  <li>
+                    No realizar la totalidad del recorrido a pie por el lugar
+                    marcado por la organización.
+                  </li>
+                  <li>
+                    No pasar por el control de salida y por los que se marquen
+                    durante el recorrido.
+                  </li>
+                  <li>Invertir más de 1h y 30 minutos.</li>
+                  <li>
+                    No seguir las indicaciones de los jueces, la organización o
+                    personal de seguridad.
+                  </li>
+                  <li>
+                    No llevar el dorsal en la parte delantera de la camiseta y
+                    en un lugar bien visible.
+                  </li>
+                  <li>Recibir ayuda externa.</li>
+                  <li>No llevar el chip (o sistema equivalente) en el lugar indicado.</li>
+                  <li>
+                    Por estar sancionado por el Comité Olímpico o la Ecuatoriana
+                    de Atletismo por haber usado DOPING en cualquier evento
+                    Nacional o Internacional, mientras dure su sanción.
+                  </li>
+                  <li>Participar con el dorsal de otro corredor.</li>
+                  <li>Participar con un dorsal no autorizado por la Organización.</li>
+                  <li>Al atleta que no manifieste un comportamiento deportivo</li>
+                </ul>
+              </div>
+
+              <p>
+                Los participantes no están autorizados para correr acompañados
+                de mascotas, ni otras personas ajenas a la competición, en
+                especial menores de edad, por cuestiones de seguridad, pudiendo
+                ser descalificados por este motivo, y no figurarían en la
+                clasificación final ni podrían acceder a ninguno de los premios
+                u obsequios que la organización otorgue.
+              </p>
+            </div>
+          </ArticleCard>
+
+          <ArticleCard id="art-12" title="Artículo 12. Vehículos">
+            <div className="space-y-3">
+              <p>
+                Los únicos vehículos autorizados seguir la prueba son los
+                designados e identificados por la organización. Queda totalmente
+                prohibido seguir a los atletas en moto, auto, bicicleta, por el
+                peligro que esto traería a los corredores.
+              </p>
+              <p>
+                El control del tráfico y el cierre de vías estarán a cargo de
+                la Dirección de Tránsito, Transporte Terrestre y Seguridad Vial.
+              </p>
+            </div>
+          </ArticleCard>
+
+          <ArticleCard id="art-13" title="Artículo 13. Premios">
+            <div className="space-y-3">
+              <p>
+                Los cuadros preliminares de los ganadores se exhibirán en la
+                página web de la carrera www.10krutadelostresjuanes.com.ec una
+                vez terminada la competencia en el Estadio Bellavista, los
+                atletas que tengan que realizar algún reclamo con respecto a su
+                ubicación se receptará por escrito y al correo electrónico:
+                inscripciones@10krutadelostresjuanes.com.ec con fecha tope una
+                semana después de realizada la carrera, es decir hasta el{" "}
+                <strong>viernes 13 de Febrero de 2026</strong>.
+              </p>
+              <p>
+                Luego de ello se realizará de ser el caso los cambios
+                respectivos y de ahí, se dará a conocer el Cuadro Oficial de
+                ganadores de la carrera. Se tendrá un plazo máximo de una semana
+                para presentar los documentos solicitados por el GAD AMBATO para
+                su correspondiente pago. Una vez transcurrido este tiempo la
+                APDT organizadora del evento deslinda su responsabilidad sobre
+                el pago, siendo responsabilidad del atleta por el incumplimiento
+                para el cobro, luego de este plazo se dará aproximadamente 90
+                DÍAS LABORABLES para la cancelación directa a los atletas por el
+                GAD AMBATO.
+              </p>
+              <p>
+                Una vez que el GAD de Ambato lo autorice se procederá al pago de
+                los premios económicos para las diferentes categorías de damas
+                y varones, se solicitará CERTIFICADO BANCARIO Y LA CEDULA DE
+                CIUDADANIA o cualquier otro documento que soliciten los
+                organizadores.
+              </p>
+              <p>
+                En la categoría de Personas con Discapacidad es necesario el
+                carnet del CONADIS para cobrar el Premio.
+              </p>
+              <p>
+                En la categoría Interfuerzas se solicitará el carnet vigente de
+                FFAA o institución afín.
+              </p>
+              <p>
+                En la categoría Colegial de Tungurahua es necesario el Carnet
+                Estudiantil vigente de cualquier colegio de nuestra Provincia
+                para cobrar el Premio, en caso de ser menor de edad, se
+                solicitará la documentación al representante legal del menor.
+              </p>
+            </div>
+          </ArticleCard>
+
+          <ArticleCard id="art-14" title="Artículo 14. Sorteo del Vehículo">
+            <p>
+              Al finalizar la carrera se sorteará un vehículo para lo cual los
+              atletas deberán cumplir estos requisitos: participarán todos los
+              atletas inscritos legalmente, que hayan cumplido todo el recorrido
+              y que se encuentre presente en el Estadio Bellavista al momento
+              del sorteo. No participarán ni atletas invitados y gratuidades,
+              no se aceptará reclamos posteriores por incumplir cualquiera de
+              estos requisitos.
+            </p>
+          </ArticleCard>
+
+          <ArticleCard id="art-15" title="Artículo 15. Responsabilidad">
+            <div className="space-y-3">
+              <p>
+                Pese al seguro de vida y contra accidentes, la organización no
+                se responsabiliza de los daños que pudieran ocasionar las
+                imprudencias o negligencias de los atletas, el seguro será
+                entregado siempre y cuando se confirme la seriedad del
+                accidente.
+              </p>
+              <p>
+                De igual manera el atleta se declara en condiciones físicas,
+                médicas y psicológicas para realizar esta carrera y lo hace bajo
+                su responsabilidad.
+              </p>
+            </div>
+          </ArticleCard>
+
+          <ArticleCard id="art-16" title="Artículo 16. Aceptación">
+            <p>
+              Todos los participantes por el hecho de inscribirse aceptan el
+              reglamento o en caso de duda o de sugerir una situación o reflejada
+              a los mismos se sujetará a lo que disponga el Comité Organizador.
+            </p>
+          </ArticleCard>
+
+          <ArticleCard id="art-17" title="Artículo 17. Autorización">
+            <div className="space-y-3">
+              <p>
+                Autorizo a los organizadores del evento a la grabación total o
+                parcial de mi participación en el mismo mediante fotografías,
+                películas, televisión, radio, video y cualquier otro medio
+                conocido o por conocer y cedo todos los derechos relativos a su
+                explotación comercial y publicitaria que consideren oportuno
+                ejercitar, sin derecho por mi parte a recibir compensación
+                económica alguna.
+              </p>
+              <p>
+                El atleta que utilice la marca 10k Ruta de los Tres Juanes
+                necesitará autorización de la organización para cualquier tipo
+                de publicación o difusión, en caso de infringir se someterá a un
+                proceso legal.
+              </p>
+            </div>
+          </ArticleCard>
+
+          <ArticleCard id="art-18" title="Artículo 18. Abandonos">
+            <p>
+              La organización espera y desea que todos los participantes
+              concluyan la carrera sin embargo el atleta que lo abandone, deberá
+              entregar el chip de la competencia a un responsable de la
+              organización.
+            </p>
+          </ArticleCard>
+
+          <ArticleCard id="art-19" title="Artículo 19. Entrega de Chips">
+            <p>
+              La entrega de los chips y kits se realizará en Ambato Av. Los
+              Guaytambos, 180108 Vehicentro | Sinotruk – Ficoa.{" "}
+              <strong>Jueves 5 de Febrero</strong> de 10h00 a 17h00 y{" "}
+              <strong>Viernes 6 de Febrero</strong> de 9h00 a 12h00.
+            </p>
+          </ArticleCard>
+
+          <ArticleCard id="art-20" title="Artículo 20. Premios y Categorías">
+            <PremiosTables />
+          </ArticleCard>
+
+          <ArticleCard
+            id="anexo"
+            title="Anexo. Reglamento de aplicación a la Ordenanza Municipal"
+          >
+            <AnexoOrdenanza />
+          </ArticleCard>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ArticleCard({
+  id,
+  title,
+  children,
+}: {
+  id: string;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <article
+      id={id}
+      className="
+        rounded-[28px]
+        border border-black/10
+        bg-white
+        shadow-[0_10px_30px_rgba(0,0,0,0.06)]
+        overflow-hidden
+        scroll-mt-28
+      "
+    >
+      <div className="px-5 sm:px-7 py-4 sm:py-5 bg-black/[0.03] border-b border-black/10">
+        <h3 className="font-extrabold text-black/90 text-[16px] sm:text-[18px]">
+          {title}
+        </h3>
+      </div>
+      <div className="px-5 sm:px-7 py-6">{children}</div>
+    </article>
+  );
+}
+
+function PremiosTables() {
+  const tables = [
+    {
+      title: "ELITE — ABIERTO",
+      headers: ["UBICACIÓN", "HOMBRE", "MUJER"],
+      rows: [
+        ["PRIMERO", "5", "5"],
+        ["SEGUNDO", "4", "4"],
+        ["TERCERO", "3", "3"],
+        ["CUARTO", "2", "2"],
+        ["QUINTO", "2", "2"],
+      ],
+    },
+    {
+      title: "JUVENIL — HASTA 19 AÑOS",
+      headers: ["UBICACIÓN", "HOMBRE", "MUJER"],
+      rows: [
+        ["PRIMERO", "2", "2"],
+        ["SEGUNDO", "1", "1"],
+        ["TERCERO", "1", "1"],
+      ],
+    },
+    {
+      title: "SENIOR 1 — DE 20 A 29 AÑOS",
+      headers: ["UBICACIÓN", "HOMBRE", "MUJER"],
+      rows: [
+        ["PRIMERO", "2", "2"],
+        ["SEGUNDO", "1", "1"],
+        ["TERCERO", "1", "1"],
+      ],
+    },
+    {
+      title: "SENIOR 2 — DE 30 A 39 AÑOS",
+      headers: ["UBICACIÓN", "HOMBRE", "MUJER"],
+      rows: [
+        ["PRIMERO", "2", "2"],
+        ["SEGUNDO", "1", "1"],
+        ["TERCERO", "1", "1"],
+      ],
+    },
+    {
+      title: "MASTER — DE 40 A 49 AÑOS",
+      headers: ["UBICACIÓN", "HOMBRE", "MUJER"],
+      rows: [
+        ["PRIMERO", "2", "2"],
+        ["SEGUNDO", "1", "1"],
+        ["TERCERO", "1", "1"],
+      ],
+    },
+    {
+      title: "SUPERMASTER — DE 50 A 59 AÑOS",
+      headers: ["UBICACIÓN", "HOMBRE", "MUJER"],
+      rows: [
+        ["PRIMERO", "2", "2"],
+        ["SEGUNDO", "1", "1"],
+        ["TERCERO", "1", "1"],
+      ],
+    },
+    {
+      title: "VILCABAMBA — DE 60 EN ADELANTE",
+      headers: ["UBICACIÓN", "HOMBRE", "MUJER"],
+      rows: [
+        ["PRIMERO", "2", "2"],
+        ["SEGUNDO", "1", "1"],
+        ["TERCERO", "1", "1"],
+      ],
+    },
+    {
+      title: "COLEGIAL — DE 14 A 18 AÑOS",
+      headers: ["UBICACIÓN", "HOMBRE", "MUJER"],
+      rows: [
+        ["PRIMERO", "2", "2"],
+        ["SEGUNDO", "1", "1"],
+        ["TERCERO", "1", "1"],
+      ],
+    },
+  ];
+
+  return (
+    <div className="space-y-5">
+      <p className="text-black/70">
+        (Los valores se presentan tal como constan en el documento de
+        incentivos.)
+      </p>
+
+      {tables.map((t) => (
+        <div
+          key={t.title}
+          className="rounded-2xl border border-black/10 overflow-hidden"
+        >
+          <div className="px-4 py-3 bg-black/[0.03] border-b border-black/10">
+            <p className="font-bold uppercase tracking-[0.18em] text-[12px] text-black/70">
+              {t.title}
+            </p>
+          </div>
+          <div className="overflow-auto">
+            <table className="w-full min-w-[560px] text-[15px] sm:text-[16px]">
+              <thead>
+                <tr className="text-left">
+                  {t.headers.map((h) => (
+                    <th
+                      key={h}
+                      className="px-4 py-3 font-extrabold text-black/70 border-b border-black/10"
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {t.rows.map((r) => (
+                  <tr
+                    key={r[0]}
+                    className="border-b border-black/5 last:border-0"
+                  >
+                    <td className="px-4 py-3 font-bold text-black/80">{r[0]}</td>
+                    <td className="px-4 py-3">{r[1]}</td>
+                    <td className="px-4 py-3">{r[2]}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+
+      <div className="rounded-2xl border border-black/10 overflow-hidden">
+        <div className="px-4 py-3 bg-black/[0.03] border-b border-black/10">
+          <p className="font-bold uppercase tracking-[0.18em] text-[12px] text-black/70">
+            CAPACIDADES ESPECIALES / SILLA DE CALLE / INTERFUERZAS
+          </p>
+        </div>
+        <div className="overflow-auto">
+          <table className="w-full min-w-[780px] text-[15px] sm:text-[16px]">
+            <thead>
+              <tr className="text-left">
+                <th className="px-4 py-3 font-extrabold text-black/70 border-b border-black/10">
+                  UBICACIÓN
+                </th>
+                <th className="px-4 py-3 font-extrabold text-black/70 border-b border-black/10">
+                  Discapacidad Intelectual y Visual
+                </th>
+                <th className="px-4 py-3 font-extrabold text-black/70 border-b border-black/10">
+                  SILLA DE CALLE
+                </th>
+                <th className="px-4 py-3 font-extrabold text-black/70 border-b border-black/10">
+                  INTERFUERZAS
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                ["PRIMERO", "2", "2", "2"],
+                ["SEGUNDO", "1", "1", "1"],
+                ["TERCERO", "1", "1", "1"],
+              ].map((r) => (
+                <tr
+                  key={r[0]}
+                  className="border-b border-black/5 last:border-0"
+                >
+                  <td className="px-4 py-3 font-bold text-black/80">{r[0]}</td>
+                  <td className="px-4 py-3">{r[1]}</td>
+                  <td className="px-4 py-3">{r[2]}</td>
+                  <td className="px-4 py-3">{r[3]}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AnexoOrdenanza() {
+  return (
+    <div className="space-y-6">
+      <p>
+        Reglamento de Aplicación al articulo 6 de la ORDENANZA MUNICIPAL que
+        establece los incentivos para la Carrera Atlética 10K Ruta de los Tres
+        Juanes.
+      </p>
+
+      <div>
+        <p className="font-extrabold">Artículo 1.- Objeto. –</p>
+        <p className="mt-2">
+          La Ordenanza que establece los incentivos para la Carrera Atlética 10K
+          Ruta de los Tres Juanes, asigna recursos equivalentes a trabajador en
+          general, recursos que se utilizarán para premiar a los ganadores a lo
+          determinado en el presente reglamento.
+        </p>
+      </div>
+
+      <div>
+        <p className="font-extrabold">Artículo 2.- Categorías. –</p>
+        <p className="mt-2">
+          Se constituyen las siguientes categorías, en base a las cuales se
+          realizará la distribución de los recursos fijados en la Ordenanza que
+          establece los incentivos para la Carrera Atlética 10K Ruta de los Tres
+          Juanes:
+        </p>
+        <div className="mt-3 grid sm:grid-cols-2 gap-2 text-black/85">
+          <div>ELITE — DAMAS Y VARONES</div>
+          <div>JUVENIL — DAMAS Y VARONES (Hasta 19 años 11 meses)</div>
+          <div>SENIOR 1 — DAMAS Y VARONES (De 20 a 29 años 11 meses)</div>
+          <div>SENIOR 2 — DAMAS Y VARONES (De 30 a 39 años 11 meses)</div>
+          <div>MASTER — DAMAS Y VARONES (De 40 a 49 años 11 meses)</div>
+          <div>SUPERMASTER — DAMAS Y VARONES (De 50 a 59 años 11 meses)</div>
+          <div>VILCABAMBAS — DAMAS Y VARONES (De 60 años en adelante)</div>
+          <div>COLEGIAL — DAMAS Y VARONES (De 14 a 18 años 11 meses)</div>
+          <div className="sm:col-span-2">
+            CAPACIDADES ESPECIALES — Discapacidad intelectual y Visual / Silla de
+            Calle / Interfuerzas
+          </div>
+        </div>
+        <p className="mt-3 text-black/70">
+          Los límites de edad para cada categoría se toman en cuenta a la fecha
+          que se realice la Competencia Atlética 10K Ruta de los Tres Juanes.
+        </p>
+      </div>
+
+      <div>
+        <p className="font-extrabold">Artículo 3.- Distribución. –</p>
+        <p className="mt-2">
+          La entrega de los recursos fijados en la Ordenanza que establece los
+          Incentivos para la Carrera Atlética 10K Ruta de los Tres Juanes, se
+          realizará según el detalle descrito en las tablas de “Premios y
+          Categorías”.
+        </p>
+      </div>
+
+      <div>
+        <p className="font-extrabold">Artículo 4.- Requisitos para el pago. –</p>
+        <p className="mt-2">
+          Los requisitos para proceder con los pagos serán los siguientes:
+        </p>
+        <ol className="mt-3 list-decimal pl-6 space-y-1 text-black/85">
+          <li>
+            La Resolución de Concejo Municipal donde se da por conocido el Informe
+            técnico y económico.
+          </li>
+          <li>
+            Oficio de solicitud de pago formulada por el Director de Cultura,
+            Turismo, Deportes y Recreación, en el que incluye el listado de los
+            beneficiarios.
+          </li>
+          <li>Copia de Cédula de Ciudadanía.</li>
+          <li>Copia del Certificado bancario o de la cuenta bancaria.</li>
+          <li>
+            En caso de que el ganador sea menor de edad, se deberá adjuntarse la
+            copia de cédula del representante legal.
+          </li>
+        </ol>
+      </div>
+
+      <div>
+        <p className="font-extrabold">Artículo 5.-</p>
+        <p className="mt-2">
+          Una vez hechos los pagos de existir valores no cobrados se procederá a
+          liquidar la certificación presupuestaria con el propósito de liberar
+          esos fondos para que sean utilizados por el GAD Municipalidad de
+          Ambato.
+        </p>
+      </div>
+
+      <div>
+        <p className="font-extrabold">Artículo 6.-</p>
+        <p className="mt-2">
+          Encárguese de la administración de estos recursos a la Dirección de
+          Cultura, Turismo, Deportes y Recreación.
+        </p>
+      </div>
+    </div>
+  );
+}

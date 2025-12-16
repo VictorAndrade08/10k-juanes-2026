@@ -5,8 +5,6 @@ const bebas = Bebas_Neue({
   weight: "400",
 });
 
-const reglamentoUrl = "/reglamento-10k-ruta-tres-juanes-2026.pdf";
-
 export default function ReglamentoSection() {
   return (
     <section
@@ -53,9 +51,7 @@ export default function ReglamentoSection() {
         {/* CTA */}
         <div className="flex flex-wrap items-center gap-3">
           <a
-            href={reglamentoUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/reglamento"
             className="
               inline-flex items-center justify-center
               px-10 py-4

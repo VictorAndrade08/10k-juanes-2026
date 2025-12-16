@@ -85,8 +85,9 @@ export default function Header() {
               6 Feb 2026 · 19h00
             </span>
 
+            {/* ✅ CAMBIO AQUÍ */}
             <a
-              href="#reglamento"
+              href="/reglamento"
               className="
                 px-4 py-2 text-[11px]
                 rounded-full border border-[#C02485]
@@ -168,9 +169,12 @@ export default function Header() {
               <a href="/" className="text-xl font-semibold">
                 Inicio
               </a>
-              <a href="#reglamento" className="text-xl font-semibold">
+
+              {/* ✅ CAMBIO AQUÍ */}
+              <a href="/reglamento" className="text-xl font-semibold">
                 Reglamento
               </a>
+
               <a
                 href="/verificar"
                 className="text-xl font-semibold text-[#C02485]"

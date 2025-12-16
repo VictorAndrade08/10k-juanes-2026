@@ -35,11 +35,8 @@ export default function Hero() {
           relative w-full max-w-7xl
           rounded-[48px]
           overflow-hidden
-
-          /* 🤍 FONDO BLANCO PURO */
           bg-white
           border border-black/10
-
           px-6 sm:px-8 md:px-16
           py-10 md:py-16
           grid grid-cols-1 md:grid-cols-[1.6fr_1fr]
@@ -73,12 +70,10 @@ export default function Hero() {
 
         {/* TEXTO */}
         <div className="relative z-10 flex flex-col justify-center">
-          {/* Eyebrow */}
           <p className="uppercase tracking-[0.32em] text-xs sm:text-sm text-black/60 font-semibold">
             Vive la magia de correr bajo las luces de Ambato
           </p>
 
-          {/* Título */}
           <h1
             className={`
               mt-4
@@ -88,15 +83,10 @@ export default function Hero() {
               ${bebas.className}
             `}
           >
-            <span className="block tracking-[0.08em]">
-              10K Ruta de los
-            </span>
-            <span className="block tracking-[0.08em]">
-              Tres Juanes 2026
-            </span>
+            <span className="block tracking-[0.08em]">10K Ruta de los</span>
+            <span className="block tracking-[0.08em]">Tres Juanes 2026</span>
           </h1>
 
-          {/* Descripción */}
           <p className="mt-5 text-base sm:text-lg text-black/75 max-w-xl">
             ¡Corre bajo las luces de Ambato y celebra la Fiesta de la Fruta y de
             las Flores en una carrera nocturna única en Ecuador!
@@ -104,7 +94,6 @@ export default function Hero() {
 
           {/* CTAs */}
           <div className="mt-8 flex flex-wrap gap-4">
-            {/* CTA principal */}
             <a
               href="/inscripcion"
               className="
@@ -121,9 +110,9 @@ export default function Hero() {
               ¡Inscríbete aquí ahora!
             </a>
 
-            {/* CTA secundario */}
+            {/* ✅ CAMBIO AQUÍ */}
             <a
-              href="#reglamento"
+              href="/reglamento"
               className="
                 inline-flex items-center justify-center
                 px-8 py-3 rounded-full
@@ -138,7 +127,6 @@ export default function Hero() {
             </a>
           </div>
 
-          {/* Legal */}
           <p className="mt-6 text-xs sm:text-sm text-black/60">
             Organiza: Asociación de Periodistas Deportivos de Tungurahua · Ambato – Ecuador
           </p>
