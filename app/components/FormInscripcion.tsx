@@ -33,6 +33,9 @@ export default function InscripcionPage() {
 
   const componentRef = useRef<HTMLDivElement | null>(null);
 
+  // ✅ NUEVO: aceptación de términos
+  const [acceptTerms, setAcceptTerms] = useState(false);
+
   // ⭐ Evitar scroll en la primera carga
   const didMount = useRef(false);
 
@@ -536,6 +539,31 @@ ${json.file_url}
                   </select>
                 </div>
 
+                {/* ✅ NUEVO: términos */}
+                <div className="mt-2 rounded-xl border border-white/10 bg-white/5 p-4">
+                  <label className="flex items-start gap-3 text-sm text-gray-300">
+                    <input
+                      type="checkbox"
+                      checked={acceptTerms}
+                      onChange={(e) => setAcceptTerms(e.target.checked)}
+                      className="mt-1 h-4 w-4 accent-white"
+                    />
+                    <span className="leading-relaxed">
+                      Al hacer clic en <strong>Continuar</strong>, confirmo que he leído y
+                      acepto los{" "}
+                      <a
+                        href="/terminos/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-white underline underline-offset-4 hover:opacity-90"
+                      >
+                        Términos y Condiciones
+                      </a>
+                      .
+                    </span>
+                  </label>
+                </div>
+
                 {/* botones */}
                 <div className="flex justify-between mt-4">
                   <button
@@ -547,6 +575,13 @@ ${json.file_url}
 
                   <button
                     onClick={() => {
+                      // ✅ NUEVO: exigir aceptación antes de pasar
+                      if (!acceptTerms) {
+                        alert(
+                          "Debes aceptar los Términos y Condiciones para continuar."
+                        );
+                        return;
+                      }
                       if (validateStep2()) setStep(3);
                     }}
                     className="px-6 py-2 bg-white text-black rounded-md font-semibold"
