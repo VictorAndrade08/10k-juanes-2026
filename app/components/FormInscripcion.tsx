@@ -7,8 +7,6 @@ import {
   Mail,
   Phone,
   Trash2,
-  Activity,
-  Banknote,
   Landmark,
   CheckCircle2,
   AlertCircle,
@@ -18,21 +16,46 @@ import {
   ChevronLeft,
   Calendar,
   MapPin,
+  Info,
+  Trophy, // Icono para categorías
 } from "lucide-react";
 
-// Estilos dinámicos para fuente (evita errores de compilación con next/font)
+// Estilos dinámicos para fuente
 const fontStyle = {
   fontFamily: '"Barlow Condensed", sans-serif',
 };
 
-// Fuente para el título del logo (Bebas Neue simulada)
+// Fuente para el título del logo
 const titleFontStyle = {
   fontFamily: '"Bebas Neue", sans-serif',
 };
 
-// Colores de marca
-const brandPink = "#FF4EC4";
-const brandPurple = "#9B5CFF";
+// --- Interfaces para TypeScript ---
+interface FormDataState {
+  cedula: string;
+  nombres: string;
+  apellidos: string;
+  ciudad: string;
+  email: string;
+  telefono: string;
+  edad: string;
+  genero: string;
+  comprobante: File | null;
+}
+
+interface ModalProps {
+  isOpen: boolean;
+  title: string;
+  message: string;
+  type?: "success" | "error" | "warning";
+  onClose: () => void;
+}
+
+interface Category {
+  name: string;
+  price: number;
+  desc: string;
+}
 
 // --- Componente Modal Personalizado ---
 const CustomModal = ({
@@ -41,13 +64,7 @@ const CustomModal = ({
   message,
   type = "error",
   onClose,
-}: {
-  isOpen: boolean;
-  title: string;
-  message: string;
-  type?: "success" | "error" | "warning";
-  onClose: () => void;
-}) => {
+}: ModalProps) => {
   if (!isOpen) return null;
 
   return (
@@ -98,11 +115,11 @@ export default function InscripcionPage() {
   
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const [modalState, setModalState] = useState({
+  const [modalState, setModalState] = useState<Omit<ModalProps, "onClose">>({
     isOpen: false,
     title: "",
     message: "",
-    type: "error" as "error" | "warning" | "success",
+    type: "error",
   });
 
   const [whatsLink, setWhatsLink] = useState<string>("");
@@ -140,7 +157,7 @@ export default function InscripcionPage() {
   const [selectedPrice, setSelectedPrice] = useState<number>(0);
   const [previewName, setPreviewName] = useState("");
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormDataState>({
     cedula: "",
     nombres: "",
     apellidos: "",
@@ -149,23 +166,24 @@ export default function InscripcionPage() {
     telefono: "",
     edad: "",
     genero: "",
-    comprobante: null as File | null,
+    comprobante: null,
   });
 
-  const categories = [
+  const categories: Category[] = [
     { name: "Élite (Abierta)", price: 30, desc: "Categoría principal" },
     { name: "Senior 1", price: 30, desc: "20–29 años" },
     { name: "Senior 2", price: 30, desc: "30–39 años" },
     { name: "Máster", price: 30, desc: "40–49 años" },
-    { name: "Súper Máster", price: 30, desc: "50–64 años" },
-    { name: "Vilcabambas", price: 20, desc: "65+ años" },
+    { name: "Súper Máster", price: 30, desc: "50–59 años" },
+    { name: "Vilcabambas", price: 20, desc: "60 años en adelante" },
     { name: "Juvenil", price: 30, desc: "14–19 años" },
     { name: "Colegial Tungurahua", price: 30, desc: "14–18 años" },
     { name: "Capacidades Especiales", price: 20, desc: "Todas las edades" },
     { name: "Interfuerzas", price: 30, desc: "Fuerzas del orden" },
   ];
 
-  const validators = {
+  // Tipamos los validadores. Usamos un Record parcial porque no todos los campos tienen validador regex
+  const validators: Partial<Record<keyof FormDataState, (v: string) => boolean>> = {
     cedula: (v: string) => /^[0-9]{6,15}$/.test(v),
     nombres: (v: string) => /^[A-Za-zÁÉÍÓÚÑáéíóúñ ]+$/.test(v),
     apellidos: (v: string) => /^[A-Za-zÁÉÍÓÚÑáéíóúñ ]+$/.test(v),
@@ -176,13 +194,15 @@ export default function InscripcionPage() {
     genero: (v: string) => ["Masculino", "Femenino", "Otro"].includes(v),
   };
 
-  const showAlert = (title: string, message: string, type: "error" | "warning" = "error") => {
+  const showAlert = (title: string, message: string, type: "error" | "warning" | "success" = "error") => {
     setModalState({ isOpen: true, title, message, type });
   };
 
   const handleInput = useCallback(
     (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-      const { name, value, files } = e.target as any;
+      const { name, value } = e.target;
+      // 'files' solo existe en HTMLInputElement
+      const files = (e.target as HTMLInputElement).files;
 
       if (errors[name]) {
         setErrors((prev) => ({ ...prev, [name]: "" }));
@@ -225,7 +245,7 @@ export default function InscripcionPage() {
   }, []);
 
   const validateStep2 = () => {
-    const requiredFields = [
+    const requiredFields: (keyof FormDataState)[] = [
       "cedula",
       "nombres",
       "apellidos",
@@ -240,14 +260,14 @@ export default function InscripcionPage() {
     let isValid = true;
 
     for (const f of requiredFields) {
-      const val = (formData as any)[f];
+      const val = formData[f]; 
 
       if (!val) {
         newErrors[f] = "Este campo es obligatorio";
         isValid = false;
       } else {
-         // @ts-ignore
-        if (validators[f] && !validators[f](val)) {
+        const validator = validators[f];
+        if (validator && typeof val === 'string' && !validator(val)) {
           newErrors[f] = "Formato inválido";
           isValid = false;
         }
@@ -324,9 +344,14 @@ export default function InscripcionPage() {
     const body = new FormData();
     body.append("categoria", selectedCategory);
     body.append("precio", selectedPrice.toString());
-    Object.keys(formData).forEach((key) => {
-        // @ts-ignore
-      if (key !== "comprobante") body.append(key, formData[key]);
+    
+    (Object.keys(formData) as Array<keyof FormDataState>).forEach((key) => {
+      if (key !== "comprobante") {
+        const value = formData[key];
+        if (value !== null) {
+             body.append(key, String(value));
+        }
+      }
     });
 
     if (formData.comprobante instanceof File) {
@@ -384,7 +409,7 @@ export default function InscripcionPage() {
 
   const stepsLabels = ["Categoría", "Datos", "Pago", "Final"];
 
-  const renderInputField = (name: string, label: string, icon: React.ReactNode, type: string = "text", onBlur?: () => void) => (
+  const renderInputField = (name: keyof FormDataState, label: string, icon: React.ReactNode, type: string = "text", onBlur?: () => void) => (
     <div className="relative group">
       <label className="text-sm font-bold text-gray-400 uppercase tracking-wide mb-2 flex items-center gap-2">
         {icon} {label}
@@ -392,8 +417,7 @@ export default function InscripcionPage() {
       <input
         name={name}
         type={type}
-        // @ts-ignore
-        value={formData[name] || ""}
+        value={formData[name] ? String(formData[name]) : ""}
         onChange={handleInput}
         onBlur={onBlur}
         placeholder={`Ingresa tu ${label.toLowerCase()}...`}
@@ -535,7 +559,7 @@ export default function InscripcionPage() {
                 <h1 className="text-3xl md:text-5xl font-bold mb-4">Selecciona tu Categoría</h1>
                 <p className="text-gray-400 mb-8 text-lg">Elige la categoría en la que vas a competir. El precio se ajustará automáticamente.</p>
                 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4">
                   {categories.map((cat) => (
                     <button
                       key={cat.name}
@@ -544,16 +568,36 @@ export default function InscripcionPage() {
                         setSelectedPrice(cat.price);
                         setStep(2);
                       }}
-                      className="group relative bg-[#0F1218] border border-white/10 p-6 rounded-2xl text-left hover:border-[#9B5CFF] hover:bg-[#1A1E29] transition-all duration-200 active:scale-95"
+                      className="group relative bg-[#0F1218] border border-white/10 p-6 rounded-2xl text-left hover:border-[#9B5CFF] hover:bg-[#1A1E29] transition-all duration-200 active:scale-[0.98] h-full flex flex-col justify-between"
                     >
-                      <div className="flex justify-between items-start mb-2">
-                        <span className="font-bold text-xl text-white group-hover:text-[#9B5CFF] transition-colors">{cat.name}</span>
-                        <span className="bg-white/5 text-sm px-3 py-1 rounded-lg text-gray-300 group-hover:bg-[#9B5CFF] group-hover:text-white transition-colors font-mono">${cat.price}</span>
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="flex items-center gap-2">
+                           <div className="p-2 rounded-lg bg-white/5 group-hover:bg-[#9B5CFF]/20 text-gray-400 group-hover:text-[#9B5CFF] transition-colors">
+                             <Trophy size={20} />
+                           </div>
+                           <span className="font-bold text-xl text-white group-hover:text-[#9B5CFF] transition-colors leading-tight">{cat.name}</span>
+                        </div>
+                        <span className="bg-white/5 text-sm px-3 py-1 rounded-lg text-gray-300 group-hover:bg-[#9B5CFF] group-hover:text-white transition-colors font-mono font-bold shrink-0">${cat.price}</span>
                       </div>
-                      <p className="text-sm text-gray-500 group-hover:text-gray-400">{cat.desc}</p>
+                      <p className="text-base text-gray-500 group-hover:text-gray-400 pl-11">{cat.desc}</p>
                     </button>
                   ))}
                 </div>
+
+                {/* --- NOTA IMPORTANTE MEJORADA Y VALIDADA --- */}
+                <div className="mt-8 bg-yellow-500/5 border border-yellow-500/20 rounded-2xl p-5 flex items-start gap-4">
+                  <div className="p-2 bg-yellow-500/10 rounded-full text-yellow-500 shrink-0">
+                    <Info size={24} />
+                  </div>
+                  <div>
+                    <h4 className="text-yellow-500 font-bold uppercase tracking-wider text-sm mb-1">Nota Importante</h4>
+                    <p className="text-gray-300 leading-relaxed text-lg">
+                      Solo participas en la categoría que escojas. Recuerda que el premio económico aplica únicamente para la categoría seleccionada.
+                    </p>
+                  </div>
+                </div>
+                {/* ------------------------------------------- */}
+
               </div>
             )}
 
