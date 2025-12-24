@@ -17,7 +17,8 @@ import {
   Calendar,
   MapPin,
   Info,
-  Trophy, // Icono para categorías
+  Trophy,
+  HelpCircle, // Nuevo icono para la pregunta
 } from "lucide-react";
 
 // Estilos dinámicos para fuente
@@ -106,6 +107,65 @@ const CustomModal = ({
   );
 };
 
+// --- Componente Modal de Descuento ---
+const DiscountModal = ({
+  isOpen,
+  onConfirm,
+  onCancel,
+}: {
+  isOpen: boolean;
+  onConfirm: (isSenior: boolean) => void;
+  onCancel: () => void;
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-300">
+      <div className="bg-[#1C2029] border border-[#9B5CFF]/30 w-full max-w-lg rounded-3xl p-8 shadow-[0_0_50px_rgba(155,92,255,0.15)] relative animate-in zoom-in-95 duration-300">
+        <button
+          onClick={onCancel}
+          className="absolute top-4 right-4 text-gray-400 hover:text-white transition"
+        >
+          <X size={24} />
+        </button>
+        
+        <div className="flex flex-col items-center text-center gap-6">
+          <div className="w-24 h-24 bg-[#9B5CFF]/10 text-[#9B5CFF] rounded-full flex items-center justify-center mb-2 animate-bounce">
+            <HelpCircle size={48} />
+          </div>
+          
+          <div>
+            <h3 className="text-3xl font-bold text-white uppercase mb-3" style={fontStyle}>
+              ¿Aplica descuento?
+            </h3>
+            <p className="text-gray-300 text-xl leading-relaxed">
+              ¿Eres una persona de la <strong className="text-white">Tercera Edad</strong> (65 años o más)?
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full mt-2">
+            <button
+              onClick={() => onConfirm(true)}
+              className="py-4 px-6 bg-white text-black font-bold text-lg rounded-xl hover:bg-gray-200 transition shadow-lg flex flex-col items-center justify-center gap-1 group"
+            >
+              <span>SÍ, tengo 65+</span>
+              <span className="text-sm text-green-600 font-black group-hover:text-green-700">Pagas $20</span>
+            </button>
+            
+            <button
+              onClick={() => onConfirm(false)}
+              className="py-4 px-6 bg-[#0F1218] border border-white/10 text-white font-bold text-lg rounded-xl hover:bg-[#1A1E29] hover:border-white/30 transition flex flex-col items-center justify-center gap-1 group"
+            >
+              <span>NO, soy menor</span>
+              <span className="text-sm text-gray-500 font-medium group-hover:text-gray-400">Pagas $30</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function InscripcionPage() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -124,6 +184,10 @@ export default function InscripcionPage() {
 
   const [whatsLink, setWhatsLink] = useState<string>("");
   const [uploadedFileUrl, setUploadedFileUrl] = useState<string>("");
+
+  // Estado para el modal de descuento
+  const [discountModalOpen, setDiscountModalOpen] = useState(false);
+  const [pendingCategory, setPendingCategory] = useState<Category | null>(null);
 
   const componentRef = useRef<HTMLDivElement | null>(null);
   const [acceptTerms, setAcceptTerms] = useState(false);
@@ -175,14 +239,15 @@ export default function InscripcionPage() {
     { name: "Senior 2", price: 30, desc: "30–39 años" },
     { name: "Máster", price: 30, desc: "40–49 años" },
     { name: "Súper Máster", price: 30, desc: "50–59 años" },
-    { name: "Vilcabambas", price: 20, desc: "60 años en adelante" },
+    // Ahora Vilcabambas es $30 base, para poder aplicar el descuento a $20
+    { name: "Vilcabambas", price: 30, desc: "60 años en adelante" },
     { name: "Juvenil", price: 30, desc: "14–19 años" },
     { name: "Colegial Tungurahua", price: 30, desc: "14–18 años" },
     { name: "Capacidades Especiales", price: 20, desc: "Todas las edades" },
     { name: "Interfuerzas", price: 30, desc: "Fuerzas del orden" },
   ];
 
-  // Tipamos los validadores. Usamos un Record parcial porque no todos los campos tienen validador regex
+  // Tipamos los validadores
   const validators: Partial<Record<keyof FormDataState, (v: string) => boolean>> = {
     cedula: (v: string) => /^[0-9]{6,15}$/.test(v),
     nombres: (v: string) => /^[A-Za-zÁÉÍÓÚÑáéíóúñ ]+$/.test(v),
@@ -198,10 +263,34 @@ export default function InscripcionPage() {
     setModalState({ isOpen: true, title, message, type });
   };
 
+  // Manejo del click en categoría
+  const handleCategoryClick = (cat: Category) => {
+    // MODIFICADO: Solo Vilcabambas activa el modal de descuento
+    if (cat.name === "Vilcabambas") {
+      setPendingCategory(cat);
+      setDiscountModalOpen(true);
+    } else {
+      // Todas las demás categorías pasan directo
+      setSelectedCategory(cat.name);
+      setSelectedPrice(cat.price);
+      setStep(2);
+    }
+  };
+
+  // Confirmación del descuento
+  const handleDiscountConfirm = (isSenior: boolean) => {
+    if (pendingCategory) {
+      setSelectedCategory(pendingCategory.name);
+      // Si es tercera edad baja a 20, si no mantiene el precio original (30)
+      setSelectedPrice(isSenior ? 20 : pendingCategory.price);
+      setStep(2);
+    }
+    setDiscountModalOpen(false);
+  };
+
   const handleInput = useCallback(
     (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
       const { name, value } = e.target;
-      // 'files' solo existe en HTMLInputElement
       const files = (e.target as HTMLInputElement).files;
 
       if (errors[name]) {
@@ -210,30 +299,20 @@ export default function InscripcionPage() {
 
       if (files && files[0]) {
         const file = files[0];
-        const allowed = [
-          "image/jpeg",
-          "image/png",
-          "image/webp",
-          "image/heic",
-          "image/heif",
-          "application/pdf",
-        ];
+        const allowed = ["image/jpeg", "image/png", "image/webp", "image/heic", "application/pdf"];
 
         if (file.type && !allowed.includes(file.type)) {
-          showAlert("Formato no válido", "Por favor sube una imagen (JPG, PNG) o un PDF.");
+          showAlert("Formato no válido", "Por favor sube una imagen o PDF.");
           return;
         }
-
         if (file.size > 10_000_000) {
           showAlert("Archivo muy pesado", "El archivo no debe superar los 10MB.");
           return;
         }
-
         setFormData((f) => ({ ...f, [name]: file }));
         setPreviewName(file.name);
         return;
       }
-
       setFormData((f) => ({ ...f, [name]: value }));
     },
     [errors]
@@ -261,7 +340,6 @@ export default function InscripcionPage() {
 
     for (const f of requiredFields) {
       const val = formData[f]; 
-
       if (!val) {
         newErrors[f] = "Este campo es obligatorio";
         isValid = false;
@@ -273,7 +351,6 @@ export default function InscripcionPage() {
         }
       }
     }
-
     setErrors(newErrors);
     
     if (!isValid) {
@@ -281,14 +358,12 @@ export default function InscripcionPage() {
       const el = document.getElementsByName(firstError)[0];
       if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-
     return isValid;
   };
 
   const checkUserExists = async () => {
     if (!formData.cedula || formData.cedula.length < 6) return false;
     setVerifying(true);
-
     try {
       const res = await fetch(
         `https://mandarinas.10kindependenciadeambato.com/wp-json/mandarinas/v1/verificar-cedula?cedula=${formData.cedula}`,
@@ -296,14 +371,12 @@ export default function InscripcionPage() {
       );
       const json = await res.json();
       setVerifying(false);
-
       if (json && json.exists) {
         const nombreExistente = json.datos?.nombre || "Usuario";
         const catExistente = json.datos?.categoria || "Registrada";
-        
         showAlert(
           "⛔ INSCRIPCIÓN DUPLICADA",
-          `La cédula ${formData.cedula} (${nombreExistente}) ya está registrada en la categoría "${catExistente}". No se permite doble inscripción.`,
+          `La cédula ${formData.cedula} (${nombreExistente}) ya está registrada en "${catExistente}".`,
           "error"
         );
         return true;
@@ -326,14 +399,8 @@ export default function InscripcionPage() {
     if (submitting) return;
     setSubmitting(true);
 
-    if (!selectedCategory) {
-      showAlert("Falta categoría", "Por favor selecciona una categoría antes de finalizar.");
-      setSubmitting(false);
-      return;
-    }
-
-    if (!formData.comprobante) {
-      showAlert("Falta comprobante", "Debes subir la foto o PDF de tu pago.");
+    if (!selectedCategory || !formData.comprobante) {
+      showAlert("Datos incompletos", "Revisa la categoría y el comprobante.");
       setSubmitting(false);
       return;
     }
@@ -348,9 +415,7 @@ export default function InscripcionPage() {
     (Object.keys(formData) as Array<keyof FormDataState>).forEach((key) => {
       if (key !== "comprobante") {
         const value = formData[key];
-        if (value !== null) {
-             body.append(key, String(value));
-        }
+        if (value !== null) body.append(key, String(value));
       }
     });
 
@@ -363,14 +428,9 @@ export default function InscripcionPage() {
         "https://mandarinas.10kindependenciadeambato.com/wp-json/mandarinas/v1/inscribir",
         { method: "POST", body, cache: "no-store" }
       );
-
       const rawText = await res.text();
       let json: any = null;
-      try {
-        json = rawText ? JSON.parse(rawText) : null;
-      } catch {
-        json = null;
-      }
+      try { json = rawText ? JSON.parse(rawText) : null; } catch { json = null; }
 
       setLoading(false);
       setSlow(false);
@@ -378,13 +438,12 @@ export default function InscripcionPage() {
 
       if (!res.ok || !json || json.status !== "success") {
         console.error("WP Error:", rawText);
-        showAlert("Error del servidor", "Hubo un problema guardando la inscripción. Inténtalo de nuevo.");
+        showAlert("Error del servidor", "Hubo un problema guardando la inscripción.");
         setSubmitting(false);
         return;
       }
 
       if (json?.file_url) setUploadedFileUrl(String(json.file_url));
-
       setStep(4);
 
       const msg = `
@@ -402,7 +461,7 @@ export default function InscripcionPage() {
       console.error(err);
       setLoading(false);
       setSlow(false);
-      showAlert("Error de conexión", "Revisa tu conexión a internet e inténtalo de nuevo.");
+      showAlert("Error de conexión", "Revisa tu internet e inténtalo de nuevo.");
     }
     setSubmitting(false);
   };
@@ -447,11 +506,17 @@ export default function InscripcionPage() {
         onClose={() => setModalState({ ...modalState, isOpen: false })} 
       />
 
+      {/* --- MODAL DE DESCUENTO --- */}
+      <DiscountModal 
+        isOpen={discountModalOpen}
+        onCancel={() => setDiscountModalOpen(false)}
+        onConfirm={handleDiscountConfirm}
+      />
+
       <div ref={componentRef} className="w-full max-w-7xl mx-auto bg-[#1C2029]/80 backdrop-blur-xl rounded-[32px] border border-white/5 shadow-2xl overflow-hidden flex flex-col md:flex-row">
         
         {/* SIDEBAR */}
         <div className="bg-[#11141A] p-6 md:p-12 md:w-1/3 flex flex-col justify-between border-r border-white/5 relative min-w-[300px]">
-          
           <div>
             {/* LOGO */}
             <div className="mb-6 md:mb-12">
@@ -489,7 +554,7 @@ export default function InscripcionPage() {
                 </div>
             </div>
 
-            {/* LISTA DE PASOS (SOLO VISIBLE EN ESCRITORIO) */}
+            {/* LISTA DE PASOS */}
             <div className="hidden md:block space-y-8 relative z-10">
               {stepsLabels.map((label, index) => {
                 const stepNum = index + 1;
@@ -497,16 +562,7 @@ export default function InscripcionPage() {
                 const completed = step > stepNum;
                 return (
                   <div key={index} className={`flex items-center gap-5 transition-all duration-300 ${active ? "opacity-100 translate-x-2" : "opacity-40"}`}>
-                    <div 
-                      className={`
-                        w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg transition-all duration-300 border-2
-                        ${active 
-                          ? `bg-[#9B5CFF] border-[#9B5CFF] text-white shadow-[0_0_20px_#9B5CFF80]` 
-                          : completed 
-                            ? "bg-green-500 border-green-500 text-black" 
-                            : "bg-transparent border-white/20 text-white"}
-                      `}
-                    >
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg transition-all duration-300 border-2 ${active ? `bg-[#9B5CFF] border-[#9B5CFF] text-white shadow-[0_0_20px_#9B5CFF80]` : completed ? "bg-green-500 border-green-500 text-black" : "bg-transparent border-white/20 text-white"}`}>
                       {completed ? <CheckCircle2 size={24} /> : stepNum}
                     </div>
                     <div>
@@ -518,20 +574,16 @@ export default function InscripcionPage() {
               })}
             </div>
 
-            {/* INDICADOR DE PASOS COMPACTO (SOLO VISIBLE EN MÓVIL) */}
+            {/* INDICADOR MÓVIL */}
             <div className="md:hidden mb-2">
                 <div className="flex items-center justify-between mb-2">
                     <span className="text-sm text-gray-400 font-bold uppercase tracking-wider">Paso {step} de 4</span>
                     <span className="text-white font-bold uppercase">{stepsLabels[step-1]}</span>
                 </div>
                 <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
-                    <div 
-                        className="h-full bg-[#9B5CFF] transition-all duration-500"
-                        style={{ width: `${(step / 4) * 100}%` }}
-                    />
+                    <div className="h-full bg-[#9B5CFF] transition-all duration-500" style={{ width: `${(step / 4) * 100}%` }} />
                 </div>
             </div>
-
           </div>
           
           <div className="hidden md:block mt-16 md:mt-0 text-sm text-gray-500 relative z-10 font-medium">
@@ -563,11 +615,7 @@ export default function InscripcionPage() {
                   {categories.map((cat) => (
                     <button
                       key={cat.name}
-                      onClick={() => {
-                        setSelectedCategory(cat.name);
-                        setSelectedPrice(cat.price);
-                        setStep(2);
-                      }}
+                      onClick={() => handleCategoryClick(cat)}
                       className="group relative bg-[#0F1218] border border-white/10 p-6 rounded-2xl text-left hover:border-[#9B5CFF] hover:bg-[#1A1E29] transition-all duration-200 active:scale-[0.98] h-full flex flex-col justify-between"
                     >
                       <div className="flex justify-between items-start mb-3">
@@ -577,14 +625,24 @@ export default function InscripcionPage() {
                            </div>
                            <span className="font-bold text-xl text-white group-hover:text-[#9B5CFF] transition-colors leading-tight">{cat.name}</span>
                         </div>
-                        <span className="bg-white/5 text-sm px-3 py-1 rounded-lg text-gray-300 group-hover:bg-[#9B5CFF] group-hover:text-white transition-colors font-mono font-bold shrink-0">${cat.price}</span>
+                        {/* Aquí mostramos el precio doble SOLO para Vilcabambas */}
+                        <div className="text-right">
+                          <span className="bg-white/5 text-sm px-3 py-1 rounded-lg text-gray-300 group-hover:bg-[#9B5CFF] group-hover:text-white transition-colors font-mono font-bold shrink-0 block">
+                            ${cat.price}
+                          </span>
+                          {cat.name === "Vilcabambas" && (
+                            <span className="text-sm text-green-400 block mt-1 font-bold">
+                              o $20 (3ra edad)
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <p className="text-base text-gray-500 group-hover:text-gray-400 pl-11">{cat.desc}</p>
                     </button>
                   ))}
                 </div>
 
-                {/* --- NOTA IMPORTANTE MEJORADA Y VALIDADA --- */}
+                {/* --- NOTA IMPORTANTE --- */}
                 <div className="mt-8 bg-yellow-500/5 border border-yellow-500/20 rounded-2xl p-5 flex items-start gap-4">
                   <div className="p-2 bg-yellow-500/10 rounded-full text-yellow-500 shrink-0">
                     <Info size={24} />
@@ -596,8 +654,6 @@ export default function InscripcionPage() {
                     </p>
                   </div>
                 </div>
-                {/* ------------------------------------------- */}
-
               </div>
             )}
 
@@ -730,7 +786,7 @@ export default function InscripcionPage() {
                 </div>
 
                 <div className="flex gap-4">
-                  <button onClick={() => setStep(2)} className="px-8 py-4 rounded-xl border border-white/10 hover:bg-white/5 transition font-bold text-gray-300 text-lg">
+                  <button onClick={() => setStep(2)} className="px-8 py-4 rounded-xl border border-white/10 hover:bg-white/5 transition font-bold text-gray-300 flex items-center gap-2 text-lg">
                      Atrás
                   </button>
                   <button onClick={submitForm} disabled={submitting} className="flex-1 bg-[#9B5CFF] hover:bg-[#8A4DE0] text-white py-4 rounded-xl font-bold shadow-[0_0_20px_#9B5CFF50] transition disabled:opacity-50 disabled:cursor-not-allowed text-lg">
