@@ -3,7 +3,7 @@
 import React from "react";
 
 const DESKTOP_IMAGE = "https://antiquewhite-rook-228372.hostingersite.com/wp-content/uploads/2025/12/banner10K.webp";
-const MOBILE_IMAGE = "https://antiquewhite-rook-228372.hostingersite.com/wp-content/uploads/2025/12/598400494_18382025047148628_138312333499106242_n.webp";
+const MOBILE_IMAGE = "https://antiquewhite-rook-228372.hostingersite.com/wp-content/uploads/2025/12/Post10k-Editable.webp";
 
 export default function Publicidad() {
   return (
