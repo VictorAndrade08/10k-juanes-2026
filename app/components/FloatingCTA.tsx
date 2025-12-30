@@ -4,25 +4,56 @@ import { useEffect, useState } from "react";
 import { MousePointerClick } from "lucide-react";
 
 export default function FloatingCTA() {
-  const [visible, setVisible] = useState(false);
+  const [mounted, setMounted] = useState(false); // Cambié nombre a mounted para lógica de inicio
   const [isHiddenRoute, setIsHiddenRoute] = useState(false);
+  const [isOverFooter, setIsOverFooter] = useState(false); // 🔥 Nuevo estado
 
   useEffect(() => {
-    // Verificación de ruta segura para el cliente
-    // (En Next.js real usarías usePathname, aquí usamos window.location para compatibilidad)
     if (typeof window !== "undefined") {
       const isRegistration = window.location.pathname.startsWith("/inscripcion");
       setIsHiddenRoute(isRegistration);
 
       if (!isRegistration) {
-        // Retraso para que la animación de entrada sea suave después de cargar la página
-        const timer = window.setTimeout(() => setVisible(true), 1000);
+        // Retraso para entrada suave al cargar
+        const timer = window.setTimeout(() => setMounted(true), 1000);
         return () => window.clearTimeout(timer);
       }
     }
   }, []);
 
+  // 🔥 Lógica del Intersection Observer (Detector de Footer)
+  useEffect(() => {
+    if (isHiddenRoute) return;
+
+    const handleIntersect = (entries: IntersectionObserverEntry[]) => {
+      const entry = entries[0];
+      // Si el footer es visible (intersecting), ponemos isOverFooter en true
+      setIsOverFooter(entry.isIntersecting);
+    };
+
+    // Creamos el observador
+    const observer = new IntersectionObserver(handleIntersect, {
+      root: null, // viewport
+      threshold: 0, // Apenas toque un pixel del footer
+      rootMargin: "0px 0px 100px 0px" // (Opcional) Margen de seguridad
+    });
+
+    const footer = document.getElementById("site-footer");
+    
+    if (footer) {
+      observer.observe(footer);
+    }
+
+    return () => {
+      if (footer) observer.unobserve(footer);
+    };
+  }, [isHiddenRoute]);
+
   if (isHiddenRoute) return null;
+
+  // Calculamos visibilidad final: 
+  // Debe haber pasado el segundo inicial (mounted) Y NO estar sobre el footer (!isOverFooter)
+  const isVisible = mounted && !isOverFooter;
 
   return (
     <>
@@ -61,8 +92,8 @@ export default function FloatingCTA() {
 
           transition-all duration-500 ease-out cubic-bezier(0.34, 1.56, 0.64, 1)
           
-          /* Estado de visibilidad */
-          ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-20 pointer-events-none"}
+          /* 🔥 Estado de visibilidad Actualizado */
+          ${isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-20 pointer-events-none"}
         `}
       >
         <span>Inscribirme</span>
