@@ -1,68 +1,73 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
-import { Barlow_Condensed } from "next/font/google";
-
-const barlow = Barlow_Condensed({
-  subsets: ["latin"],
-  weight: ["700"],
-  display: "swap",
-});
+import { MousePointerClick } from "lucide-react";
 
 export default function FloatingCTA() {
-  const pathname = usePathname();
-  const router = useRouter();
-
   const [visible, setVisible] = useState(false);
-
-  const hiddenOnThisRoute = pathname?.startsWith("/inscripcion") ?? false;
+  const [isHiddenRoute, setIsHiddenRoute] = useState(false);
 
   useEffect(() => {
-    // si estamos en /inscripcion, asegura oculto y no programes nada
-    if (hiddenOnThisRoute) {
-      setVisible(false);
-      return;
+    // Verificación de ruta segura para el cliente
+    // (En Next.js real usarías usePathname, aquí usamos window.location para compatibilidad)
+    if (typeof window !== "undefined") {
+      const isRegistration = window.location.pathname.startsWith("/inscripcion");
+      setIsHiddenRoute(isRegistration);
+
+      if (!isRegistration) {
+        // Retraso para que la animación de entrada sea suave después de cargar la página
+        const timer = window.setTimeout(() => setVisible(true), 1000);
+        return () => window.clearTimeout(timer);
+      }
     }
+  }, []);
 
-    const timer = window.setTimeout(() => setVisible(true), 1000);
-    return () => window.clearTimeout(timer);
-  }, [hiddenOnThisRoute]);
-
-  // ✅ el return null va DESPUÉS de los hooks (ya no rompe reglas)
-  if (hiddenOnThisRoute) return null;
+  if (isHiddenRoute) return null;
 
   return (
-    <button
-      type="button"
-      onClick={() => router.push("/inscripcion")}
-      aria-label="Ir a inscripción"
-      className={`
-        ${barlow.className}
-        fixed z-[9999]
-        left-1/2 -translate-x-1/2
-        bottom-[calc(env(safe-area-inset-bottom)+22px)]
-        md:left-auto md:right-10 md:translate-x-0
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700&display=swap');
+        .font-barlow { font-family: 'Barlow Condensed', sans-serif; }
+      `}</style>
 
-        rounded-full
-        px-12 py-5 md:px-10 md:py-4
-        text-[20px] md:text-[18px]
-        uppercase tracking-[0.15em]
-        font-bold text-white
+      <a
+        href="/inscripcion"
+        aria-label="Ir a inscripción"
+        className={`
+          font-barlow
+          fixed z-[9999]
+          left-1/2 -translate-x-1/2
+          bottom-[calc(env(safe-area-inset-bottom)+24px)]
+          md:left-auto md:right-8 md:translate-x-0 md:bottom-8
 
-        bg-gradient-to-r from-[#FF0080] to-[#E5006D]
-        border border-white/10
-        backdrop-blur
+          flex items-center gap-2
+          rounded-full
+          px-10 py-4 md:px-12 md:py-5
+          text-[20px] md:text-[22px]
+          uppercase tracking-[0.1em]
+          font-bold text-white leading-none
 
-        shadow-[0_0_35px_rgba(255,0,128,0.45)]
-        hover:shadow-[0_0_50px_rgba(255,0,128,0.65)]
-        active:scale-95
+          /* Gradiente ajustado a la marca (Magenta) */
+          bg-gradient-to-r from-[#C02485] to-[#E5006D]
+          border border-white/20
+          backdrop-blur-md
 
-        transition-[opacity,transform,box-shadow] duration-500 ease-out
-        ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-5"}
-      `}
-    >
-      Inscribirme
-    </button>
+          /* Sombras y Efectos */
+          shadow-[0_10px_40px_rgba(192,36,133,0.5)]
+          hover:shadow-[0_15px_60px_rgba(192,36,133,0.7)]
+          hover:scale-105 hover:-translate-y-1
+          active:scale-95
+
+          transition-all duration-500 ease-out cubic-bezier(0.34, 1.56, 0.64, 1)
+          
+          /* Estado de visibilidad */
+          ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-20 pointer-events-none"}
+        `}
+      >
+        <span>Inscribirme</span>
+        <MousePointerClick size={24} className="animate-pulse" />
+      </a>
+    </>
   );
 }

@@ -1,108 +1,176 @@
 "use client";
 
-import { Bebas_Neue } from "next/font/google";
-
-const bebas = Bebas_Neue({
-  subsets: ["latin"],
-  weight: "400",
-});
+import React from "react";
+import { 
+  Globe, 
+  MessageCircle, 
+  CheckCircle2, 
+  ArrowRight, 
+  Smartphone,
+  CreditCard,
+  UserCheck
+} from "lucide-react";
 
 export default function RegistrationOptions() {
   return (
-    <section className="w-full px-4 pt-4 pb-6 md:pb-8 flex justify-center">
-      <div className="w-full max-w-7xl grid grid-cols-1 md:grid-cols-2 gap-10">
+    <section className="w-full px-3 py-4 flex justify-center bg-gray-50 font-sans">
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
+        .font-bebas { font-family: 'Bebas Neue', sans-serif; }
+      `}</style>
+
+      <div className="w-full max-w-7xl grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+        
         {/* ================================
             INSCRIPCIÓN EN LÍNEA (BLANCO)
         ================================= */}
-        <article className="rounded-[48px] bg-white text-black px-8 sm:px-10 md:px-14 py-12 sm:py-14 shadow-[0_18px_50px_rgba(0,0,0,0.12)] border border-black/10 flex flex-col justify-between">
-          <div>
-            <p className="text-xs tracking-[0.32em] uppercase text-black/50 font-semibold">
-              Inscripción en línea
-            </p>
+        <article className="
+            relative overflow-hidden
+            rounded-[32px] 
+            bg-white text-gray-900 
+            px-6 sm:px-10 py-10 sm:py-12 
+            shadow-[0_10px_40px_-10px_rgba(0,0,0,0.08)] 
+            border border-gray-100 
+            flex flex-col justify-between
+            group hover:shadow-[0_20px_60px_-15px_rgba(192,36,133,0.15)]
+            transition-all duration-300
+        ">
+          {/* Fondo decorativo */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-[#C02485]/5 to-transparent rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
 
-            <h2
-              className={`mt-3 text-[32px] sm:text-[38px] md:text-[44px] leading-[1.05] tracking-[0.04em] ${bebas.className}`}
-            >
-              ¡Inscríbete online
-              <br />
-              en menos de 3 minutos!
+          <div className="relative z-10">
+            <div className="flex items-center gap-2 mb-4">
+               <div className="p-2 bg-gray-100 rounded-full text-[#C02485]">
+                 <Globe size={20} />
+               </div>
+               <p className="text-xs tracking-[0.2em] uppercase text-gray-500 font-bold">
+                 Recomendado
+               </p>
+            </div>
+
+            <h2 className="text-[32px] sm:text-[42px] leading-[1] text-gray-900 font-bebas mb-4">
+              ¡Inscríbete online <br/>
+              <span className="text-[#C02485]">en menos de 3 minutos!</span>
             </h2>
 
-            <p className="mt-4 text-base sm:text-lg text-black/75 leading-relaxed">
-              Rápido y sin complicaciones: completas tus datos, subes tu comprobante
-              y te confirmamos el cupo por WhatsApp.
+            <p className="text-base text-gray-600 leading-relaxed mb-8">
+              Rápido y sin complicaciones. Asegura tu cupo inmediatamente desde tu computadora o celular.
             </p>
 
-            <ol className="mt-6 space-y-3 text-base sm:text-lg text-black/75 leading-relaxed">
-              <li>1. Elige tu categoría.</li>
-              <li>2. Completa el formulario con tus datos.</li>
-              <li>3. Sube el comprobante de pago.</li>
-              <li>4. Recibe tu confirmación por WhatsApp.</li>
-            </ol>
+            <ul className="space-y-4">
+              <ListItem icon={UserCheck} text="Elige tu categoría." />
+              <ListItem icon={CreditCard} text="Completa tus datos y paga." />
+              <ListItem icon={CheckCircle2} text="Recibe confirmación instantánea." />
+            </ul>
           </div>
 
-          <div className="mt-10">
+          <div className="mt-10 relative z-10">
             <a
               href="/inscripcion"
-              className="inline-flex items-center justify-center px-10 md:px-12 h-14 md:h-16 rounded-full bg-gradient-to-r from-[#C02485] to-[#E5006D] text-white text-[13px] md:text-[14px] tracking-[0.24em] uppercase font-bold shadow-[0_12px_35px_rgba(192,36,133,0.35)] hover:opacity-90 transition"
+              className="
+                flex items-center justify-center gap-2 w-full
+                h-14 rounded-full 
+                bg-gradient-to-r from-[#C02485] to-[#E5006D] 
+                text-white text-sm tracking-[0.15em] uppercase font-bold 
+                shadow-lg shadow-[#C02485]/30 
+                hover:shadow-[#C02485]/50 hover:-translate-y-1 hover:gap-4
+                transition-all duration-300
+              "
             >
-              Ir al formulario online
+              Ir al formulario online <ArrowRight size={18} />
             </a>
 
-            <p className="mt-5 text-sm md:text-base text-black/65">
-              Precio general: <span className="font-semibold">$30</span> ·
-              Capacidades especiales y tercera edad:{" "}
-              <span className="font-semibold">$20</span>.
+            <p className="mt-5 text-sm text-center text-gray-500">
+              Precio general: <strong className="text-gray-900">$30</strong> ·
+              Tercera edad/Discapacidad: <strong className="text-gray-900">$20</strong>
             </p>
           </div>
         </article>
 
         {/* ================================
-            INSCRIPCIÓN POR WHATSAPP (NEGRO)
+            INSCRIPCIÓN POR WHATSAPP (OSCURO)
         ================================= */}
-        <article className="rounded-[48px] bg-black/55 text-white backdrop-blur-md px-8 sm:px-10 md:px-14 py-12 sm:py-14 shadow-[0_18px_50px_rgba(0,0,0,0.45)] border border-white/10 flex flex-col justify-between">
-          <div>
-            <p className="text-xs tracking-[0.32em] uppercase text-white/60 font-semibold">
-              Inscripción por WhatsApp
-            </p>
+        <article className="
+            relative overflow-hidden
+            rounded-[32px] 
+            bg-[#111] text-white 
+            px-6 sm:px-10 py-10 sm:py-12 
+            shadow-[0_15px_50px_-10px_rgba(0,0,0,0.3)] 
+            border border-gray-800
+            flex flex-col justify-between
+            group
+        ">
+          {/* Fondo decorativo */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-[#25D366]/10 to-transparent rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
 
-            <h2
-              className={`mt-3 text-[32px] sm:text-[38px] md:text-[44px] leading-[1.05] tracking-[0.04em] ${bebas.className}`}
-            >
-              ¿Prefieres hablar con alguien?
-              <br />
-              Hazlo por WhatsApp
+          <div className="relative z-10">
+            <div className="flex items-center gap-2 mb-4">
+               <div className="p-2 bg-white/10 rounded-full text-[#25D366]">
+                 <MessageCircle size={20} />
+               </div>
+               <p className="text-xs tracking-[0.2em] uppercase text-white/50 font-bold">
+                 Asistido
+               </p>
+            </div>
+
+            <h2 className="text-[32px] sm:text-[42px] leading-[1] text-white font-bebas mb-4">
+              ¿Prefieres ayuda? <br/>
+              <span className="text-[#25D366]">Hazlo por WhatsApp</span>
             </h2>
 
-            <p className="mt-4 text-base sm:text-lg text-white/75 leading-relaxed">
-              Un asesor te guía paso a paso. Es rápido, cómodo y 100% asistido.
+            <p className="text-base text-white/70 leading-relaxed mb-8">
+              Un asesor te guiará paso a paso. Ideal si necesitas realizar consultas específicas antes de pagar.
             </p>
 
-            <ol className="mt-6 space-y-3 text-base sm:text-lg text-white/75 leading-relaxed">
-              <li>1. Envía tu nombre, cédula y categoría.</li>
-              <li>2. Recibe los datos de pago.</li>
-              <li>3. Envía tu comprobante.</li>
-              <li>4. Te confirmamos tu cupo.</li>
-            </ol>
+            <ul className="space-y-4">
+              <ListItemDark icon={Smartphone} text="Envía tus datos por chat." />
+              <ListItemDark icon={CreditCard} text="Recibe los datos para transferencia." />
+              <ListItemDark icon={CheckCircle2} text="Envía comprobante y confirma." />
+            </ul>
           </div>
 
-          <div className="mt-10">
+          <div className="mt-10 relative z-10">
             <a
               href="https://wa.me/593995102378"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center px-10 md:px-12 h-14 md:h-16 rounded-full border border-[#C02485] text-[#C02485] text-[13px] md:text-[14px] tracking-[0.24em] uppercase font-bold bg-white hover:bg-[#C02485] hover:text-white transition"
+              className="
+                flex items-center justify-center gap-2 w-full
+                h-14 rounded-full 
+                bg-white text-gray-900
+                border-2 border-transparent
+                text-sm tracking-[0.15em] uppercase font-bold 
+                shadow-lg
+                hover:bg-[#25D366] hover:text-white hover:border-[#25D366]
+                hover:-translate-y-1
+                transition-all duration-300
+              "
             >
-              Abrir WhatsApp
+              Abrir WhatsApp <MessageCircle size={18} />
             </a>
 
-            <p className="mt-5 text-sm md:text-base text-white/70">
-              WhatsApp oficial:{" "}
-              <span className="font-semibold text-white">+593 99 510 2378</span>.
+            <p className="mt-5 text-sm text-center text-white/50">
+              WhatsApp oficial: <span className="text-white font-semibold">+593 99 510 2378</span>
             </p>
           </div>
         </article>
+
       </div>
     </section>
   );
 }
+
+// Componentes auxiliares para listas limpias
+const ListItem = ({ icon: Icon, text }: { icon: any, text: string }) => (
+  <li className="flex items-start gap-3 text-gray-700">
+    <Icon size={20} className="text-[#C02485] mt-0.5 shrink-0" />
+    <span className="text-sm sm:text-base font-medium">{text}</span>
+  </li>
+);
+
+const ListItemDark = ({ icon: Icon, text }: { icon: any, text: string }) => (
+  <li className="flex items-start gap-3 text-white/90">
+    <Icon size={20} className="text-[#25D366] mt-0.5 shrink-0" />
+    <span className="text-sm sm:text-base font-medium">{text}</span>
+  </li>
+);
