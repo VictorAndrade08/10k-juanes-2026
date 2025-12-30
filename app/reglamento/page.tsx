@@ -1,12 +1,6 @@
 "use client";
 
 import React from "react";
-import { Bebas_Neue } from "next/font/google";
-
-const bebas = Bebas_Neue({
-  subsets: ["latin"],
-  weight: "400",
-});
 
 export default function ReglamentoSection() {
   return (
@@ -14,6 +8,14 @@ export default function ReglamentoSection() {
       id="reglamento"
       className="w-full px-4 py-10 md:py-14 flex justify-center"
     >
+      {/* Cargar fuente Bebas Neue via Google Fonts */}
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
+        .font-bebas {
+          font-family: 'Bebas Neue', sans-serif;
+        }
+      `}</style>
+
       {/* ✅ MISMO ANCHO QUE EL HEADER */}
       <div
         className="
@@ -39,7 +41,7 @@ export default function ReglamentoSection() {
               text-[40px] sm:text-[54px] lg:text-[66px]
               leading-[1.02]
               uppercase tracking-[0.08em]
-              ${bebas.className}
+              font-bebas
             `}
           >
             Reglamento General
@@ -49,11 +51,9 @@ export default function ReglamentoSection() {
             Carrera 10K Ruta de los Tres Juanes 2026 — “10K RUTA DE LOS TRES
             JUANES”
           </p>
-
-          {/* ✅ QUITADO: chips (fecha/tiempo/precio/inscripción) */}
         </div>
 
-        {/* BODY (✅ TODO ABIERTO, ✅ SIN ÍNDICE, ✅ SIN “ABRIR/CERRAR”, ✅ SIN IMPRIMIR) */}
+        {/* BODY */}
         <div className="mt-12 space-y-6 text-[17px] sm:text-[18px] leading-[1.9] text-black/85">
           <ArticleCard id="art-1" title="Artículo 1. Denominación">
             <p>
@@ -113,7 +113,7 @@ export default function ReglamentoSection() {
               Caracol, Ficoa, Parque los Quindes, Las Palmas, Quinta Juan
               Montalvo, Club Tungurahua, Miraflores, Las Dalias, Olmedo,
               Francisco Flor, Av. Cevallos, Mera, Urdaneta y La Llegada en el
-              Estadio Bellavista.
+              Estadio Universidad Indoamérica BELLAVISTA.
             </p>
           </ArticleCard>
 
@@ -295,9 +295,10 @@ export default function ReglamentoSection() {
               <p>
                 Los cuadros preliminares de los ganadores se exhibirán en la
                 página web de la carrera www.10krutadelostresjuanes.com.ec una
-                vez terminada la competencia en el Estadio Bellavista, los
-                atletas que tengan que realizar algún reclamo con respecto a su
-                ubicación se receptará por escrito y al correo electrónico:
+                vez terminada la competencia en el Estadio Universidad
+                Indoamérica BELLAVISTA, los atletas que tengan que realizar algún
+                reclamo con respecto a su ubicación se receptará por escrito y
+                al correo electrónico:
                 inscripciones@10krutadelostresjuanes.com.ec con fecha tope una
                 semana después de realizada la carrera, es decir hasta el{" "}
                 <strong>viernes 13 de Febrero de 2026</strong>.
@@ -343,10 +344,10 @@ export default function ReglamentoSection() {
               Al finalizar la carrera se sorteará un vehículo para lo cual los
               atletas deberán cumplir estos requisitos: participarán todos los
               atletas inscritos legalmente, que hayan cumplido todo el recorrido
-              y que se encuentre presente en el Estadio Bellavista al momento
-              del sorteo. No participarán ni atletas invitados y gratuidades,
-              no se aceptará reclamos posteriores por incumplir cualquiera de
-              estos requisitos.
+              y que se encuentre presente en el Estadio Universidad Indoamérica
+              BELLAVISTA al momento del sorteo. No participarán ni atletas
+              invitados y gratuidades, no se aceptará reclamos posteriores por
+              incumplir cualquiera de estos requisitos.
             </p>
           </ArticleCard>
 
@@ -406,9 +407,11 @@ export default function ReglamentoSection() {
 
           <ArticleCard id="art-19" title="Artículo 19. Entrega de Chips">
             <p>
-              La entrega de los chips y kits se realizará en Ambato Av. Los
-              Guaytambos, 180108 Vehicentro | Sinotruk – Ficoa.{" "}
-              <strong>Jueves 5 de Febrero</strong> de 10h00 a 17h00 y{" "}
+              La entrega de los chips y kits se realizará en la{" "}
+              <strong>
+                Universidad Indoamérica (Av. Manuela Saenz y Agramonte)
+              </strong>
+              . <strong>Jueves 5 de Febrero</strong> de 10h00 a 17h00 y{" "}
               <strong>Viernes 6 de Febrero</strong> de 9h00 a 12h00.
             </p>
           </ArticleCard>
