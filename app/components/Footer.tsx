@@ -5,7 +5,8 @@ import { Facebook, Instagram, MessageCircle } from "lucide-react";
 
 export default function Footer() {
   return (
-    <footer className="w-full px-3 py-4 flex justify-center bg-gray-50 font-sans">
+    // 🔥 IMPORTANTE: Aquí agregamos id="site-footer" para que el botón flotante lo detecte
+    <footer id="site-footer" className="w-full px-3 py-4 flex justify-center bg-gray-50 font-sans">
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
         .font-bebas { font-family: 'Bebas Neue', sans-serif; }
@@ -25,11 +26,11 @@ export default function Footer() {
           gap-12 lg:gap-20
           relative
           overflow-hidden
-          /* Optimización de renderizado para contenedores complejos */
+          /* Optimización de renderizado */
           transform-gpu translate-z-0
         "
       >
-        {/* Fondo Decorativo - Optimizado para GPU */}
+        {/* Fondo Decorativo */}
         <div 
             className="
                 absolute top-0 right-0 
@@ -39,7 +40,6 @@ export default function Footer() {
                 blur-[120px] 
                 pointer-events-none 
                 translate-x-1/3 -translate-y-1/3
-                /* Forzar aceleración de hardware para evitar lag en scroll */
                 transform-gpu will-change-transform
             " 
         />
@@ -57,6 +57,7 @@ export default function Footer() {
             "
             aria-hidden="true"
           >
+            {/* ✅ TU LOGO ORIGINAL */}
             <img
               src="/white.svg"
               alt="Logo 10K"
@@ -64,7 +65,6 @@ export default function Footer() {
               loading="lazy"
               decoding="async"
               onError={(e) => {
-                // Fallback ligero SVG inline si falla la imagen
                 e.currentTarget.style.display = 'none';
                 if (e.currentTarget.parentElement) {
                     e.currentTarget.parentElement.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" class="w-8 h-8"><path d="M11.25 4.533A9.707 9.707 0 006 3a9.735 9.735 0 00-3.25.555.75.75 0 00-.5.707v14.25a.75.75 0 001 .707A8.237 8.237 0 016 18.75c1.995 0 3.823.707 5.25 1.886V4.533zM12.75 20.636A8.214 8.214 0 0118 18.75c.966 0 1.89.166 2.75.47V4.982c-.371-.16-.763-.298-1.168-.414a9.721 9.721 0 00-4.082 0 8.234 8.234 0 00-2.75 1.868v14.2z" /></svg>';
