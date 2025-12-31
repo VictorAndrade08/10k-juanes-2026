@@ -1,45 +1,46 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link"; // 1. Navegación rápida
+import { usePathname } from "next/navigation"; // 2. Detección reactiva de ruta
+import { Barlow_Condensed } from "next/font/google"; // 3. Fuente optimizada
 import { MousePointerClick } from "lucide-react";
 
+// Configuración de la fuente Barlow Condensed
+const barlow = Barlow_Condensed({
+  subsets: ["latin"],
+  weight: "700",
+  display: "swap",
+  variable: "--font-barlow",
+});
+
 export default function FloatingCTA() {
-  const [mounted, setMounted] = useState(false); // Cambié nombre a mounted para lógica de inicio
-  const [isHiddenRoute, setIsHiddenRoute] = useState(false);
-  const [isOverFooter, setIsOverFooter] = useState(false); // 🔥 Nuevo estado
+  const pathname = usePathname(); // Hook para saber en qué página estamos
+  const [mounted, setMounted] = useState(false);
+  const [isOverFooter, setIsOverFooter] = useState(false);
 
+  // Lógica de montaje (Entrada suave)
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const isRegistration = window.location.pathname.startsWith("/inscripcion");
-      setIsHiddenRoute(isRegistration);
-
-      if (!isRegistration) {
-        // Retraso para entrada suave al cargar
-        const timer = window.setTimeout(() => setMounted(true), 1000);
-        return () => window.clearTimeout(timer);
-      }
-    }
+    setMounted(true);
   }, []);
 
-  // 🔥 Lógica del Intersection Observer (Detector de Footer)
+  // Lógica del Intersection Observer (Detector de Footer)
   useEffect(() => {
-    if (isHiddenRoute) return;
+    // Si no estamos en el navegador, no hacemos nada
+    if (typeof window === "undefined") return;
 
     const handleIntersect = (entries: IntersectionObserverEntry[]) => {
       const entry = entries[0];
-      // Si el footer es visible (intersecting), ponemos isOverFooter en true
       setIsOverFooter(entry.isIntersecting);
     };
 
-    // Creamos el observador
     const observer = new IntersectionObserver(handleIntersect, {
-      root: null, // viewport
-      threshold: 0, // Apenas toque un pixel del footer
-      rootMargin: "0px 0px 100px 0px" // (Opcional) Margen de seguridad
+      root: null,
+      threshold: 0,
+      rootMargin: "0px 0px 100px 0px", // Margen de seguridad para ocultarlo antes de tocar el footer
     });
 
-    const footer = document.getElementById("site-footer");
-    
+    const footer = document.getElementById("site-footer"); // Asegúrate de que tu Footer tenga este ID
     if (footer) {
       observer.observe(footer);
     }
@@ -47,26 +48,22 @@ export default function FloatingCTA() {
     return () => {
       if (footer) observer.unobserve(footer);
     };
-  }, [isHiddenRoute]);
+  }, [pathname]); // Se re-ejecuta si cambiamos de página
 
-  if (isHiddenRoute) return null;
+  // Si estamos en la página de inscripción, NO renderizamos nada
+  if (pathname?.startsWith("/inscripcion")) return null;
 
-  // Calculamos visibilidad final: 
-  // Debe haber pasado el segundo inicial (mounted) Y NO estar sobre el footer (!isOverFooter)
+  // Visibilidad final
   const isVisible = mounted && !isOverFooter;
 
   return (
-    <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700&display=swap');
-        .font-barlow { font-family: 'Barlow Condensed', sans-serif; }
-      `}</style>
-
-      <a
+    // Inyectamos la variable de fuente
+    <div className={barlow.variable}>
+      <Link
         href="/inscripcion"
-        aria-label="Ir a inscripción"
+        aria-label="Ir a formulario de inscripción"
         className={`
-          font-barlow
+          font-[family-name:var(--font-barlow)]
           fixed z-[9999]
           left-1/2 -translate-x-1/2
           bottom-[calc(env(safe-area-inset-bottom)+24px)]
@@ -79,7 +76,7 @@ export default function FloatingCTA() {
           uppercase tracking-[0.1em]
           font-bold text-white leading-none
 
-          /* Gradiente ajustado a la marca (Magenta) */
+          /* Gradiente Magenta */
           bg-gradient-to-r from-[#C02485] to-[#E5006D]
           border border-white/20
           backdrop-blur-md
@@ -92,13 +89,13 @@ export default function FloatingCTA() {
 
           transition-all duration-500 ease-out cubic-bezier(0.34, 1.56, 0.64, 1)
           
-          /* 🔥 Estado de visibilidad Actualizado */
+          /* Estado de visibilidad */
           ${isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-20 pointer-events-none"}
         `}
       >
         <span>Inscribirme</span>
         <MousePointerClick size={24} className="animate-pulse" />
-      </a>
-    </>
+      </Link>
+    </div>
   );
 }

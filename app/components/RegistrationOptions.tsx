@@ -1,6 +1,8 @@
 "use client";
 
 import React from "react";
+import Link from "next/link"; // MEJORA: Navegación SPA instantánea
+import { Bebas_Neue } from "next/font/google"; // MEJORA: Carga de fuentes
 import { 
   Globe, 
   MessageCircle, 
@@ -11,14 +13,18 @@ import {
   UserCheck
 } from "lucide-react";
 
+// Configuración de la fuente optimizada
+const bebas = Bebas_Neue({
+  subsets: ["latin"],
+  weight: "400",
+  display: "swap",
+  variable: "--font-bebas",
+});
+
 export default function RegistrationOptions() {
   return (
-    <section className="w-full px-3 py-4 flex justify-center bg-gray-50 font-sans">
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
-        .font-bebas { font-family: 'Bebas Neue', sans-serif; }
-      `}</style>
-
+    // Inyectamos la variable de fuente en el contenedor principal
+    <section className={`w-full px-3 py-4 flex justify-center bg-gray-50 font-sans ${bebas.variable}`}>
       <div className="w-full max-w-7xl grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
         
         {/* ================================
@@ -48,7 +54,7 @@ export default function RegistrationOptions() {
                </p>
             </div>
 
-            <h2 className="text-[32px] sm:text-[42px] leading-[1] text-gray-900 font-bebas mb-4">
+            <h2 className="text-[32px] sm:text-[42px] leading-[1] text-gray-900 font-[family-name:var(--font-bebas)] mb-4">
               ¡Inscríbete online <br/>
               <span className="text-[#C02485]">en menos de 3 minutos!</span>
             </h2>
@@ -65,7 +71,8 @@ export default function RegistrationOptions() {
           </div>
 
           <div className="mt-10 relative z-10">
-            <a
+            {/* MEJORA: Usamos Link para navegación interna rápida */}
+            <Link
               href="/inscripcion"
               className="
                 flex items-center justify-center gap-2 w-full
@@ -78,7 +85,7 @@ export default function RegistrationOptions() {
               "
             >
               Ir al formulario online <ArrowRight size={18} />
-            </a>
+            </Link>
 
             <p className="mt-5 text-sm text-center text-gray-500">
               Precio general: <strong className="text-gray-900">$30</strong> ·
@@ -113,7 +120,7 @@ export default function RegistrationOptions() {
                </p>
             </div>
 
-            <h2 className="text-[32px] sm:text-[42px] leading-[1] text-white font-bebas mb-4">
+            <h2 className="text-[32px] sm:text-[42px] leading-[1] text-white font-[family-name:var(--font-bebas)] mb-4">
               ¿Prefieres ayuda? <br/>
               <span className="text-[#25D366]">Hazlo por WhatsApp</span>
             </h2>
@@ -130,6 +137,7 @@ export default function RegistrationOptions() {
           </div>
 
           <div className="mt-10 relative z-10">
+            {/* NOTA: WhatsApp es externo, así que mantenemos <a> con rel="noopener" */}
             <a
               href="https://wa.me/593995102378"
               target="_blank"

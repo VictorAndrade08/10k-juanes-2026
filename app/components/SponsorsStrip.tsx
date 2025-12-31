@@ -1,7 +1,16 @@
 "use client";
 
 import React, { useMemo, useEffect, useRef, useState } from "react";
+import Image from "next/image"; // IMPORTANTE: Optimización de imágenes
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Bebas_Neue } from "next/font/google"; // Fuente optimizada
+
+const bebas = Bebas_Neue({
+  subsets: ["latin"],
+  weight: "400",
+  display: "swap",
+  variable: "--font-bebas",
+});
 
 const SPONSOR_LOGOS = [
   {
@@ -32,7 +41,6 @@ const SPONSOR_LOGOS = [
     src: "https://darkgreen-monkey-141925.hostingersite.com/wp-content/uploads/2024/12/Carrera-10K-Independencia-de-Amb-1-1.webp",
     alt: "Corredores 10K Independencia de Ambato noche",
   },
-  // Nuevos logos agregados
   {
     src: "https://antiquewhite-rook-228372.hostingersite.com/wp-content/uploads/2025/12/Carrera-10K-Independencia-de-Amb-9-1-copia.webp",
     alt: "Logo Patrocinador Adicional 1",
@@ -47,24 +55,13 @@ const SPONSOR_LOGOS = [
   },
 ];
 
-function shuffle<T>(arr: T[]): T[] {
-  const copy = [...arr];
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy;
-}
-
 export default function SponsorsStrip() {
-  const logos = useMemo(() => shuffle(SPONSOR_LOGOS), []);
-  const duplicated = useMemo(() => [...logos, ...logos, ...logos, ...logos], [logos]);
+  // Orden estable para evitar errores de hidratación y saltos visuales
+  const duplicated = useMemo(() => [...SPONSOR_LOGOS, ...SPONSOR_LOGOS, ...SPONSOR_LOGOS, ...SPONSOR_LOGOS], []);
   
   const containerRef = useRef<HTMLDivElement>(null);
   const positionRef = useRef(0);
   const animationRef = useRef<number>(0);
-  
-  // Referencia para la velocidad actual (permite cambiarla sin re-renderizar)
   const speedRef = useRef(0.4); 
   
   const [direction, setDirection] = useState<1 | -1>(1);
@@ -75,14 +72,13 @@ export default function SponsorsStrip() {
     if (!container) return;
 
     const animate = () => {
-      // Solo nos movemos si NO está pausado (hover en logos)
       if (!isPaused && container) {
         positionRef.current -= speedRef.current * direction;
         
+        // Optimización: Usar offsetWidth es más rápido que scrollWidth en bucles
         const totalWidth = container.scrollWidth;
         const singleSetWidth = totalWidth / 4;
 
-        // Loop Infinito
         if (direction === 1) {
            if (positionRef.current <= -singleSetWidth) {
              positionRef.current += singleSetWidth;
@@ -103,24 +99,18 @@ export default function SponsorsStrip() {
     return () => cancelAnimationFrame(animationRef.current);
   }, [direction, isPaused]);
 
-  // Manejadores para acelerar al pasar por las flechas
   const handleArrowEnter = (newDirection: 1 | -1) => {
     setDirection(newDirection);
-    speedRef.current = 2.5; // VELOCIDAD RÁPIDA
-    setIsPaused(false); // Aseguramos que no esté pausado
+    speedRef.current = 2.5;
+    setIsPaused(false);
   };
 
   const handleArrowLeave = () => {
-    speedRef.current = 0.4; // VELOCIDAD NORMAL
+    speedRef.current = 0.4;
   };
 
   return (
-    <section className="w-full px-3 py-4 flex justify-center bg-gray-50 font-sans">
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
-        .font-bebas { font-family: 'Bebas Neue', sans-serif; }
-      `}</style>
-
+    <section className={`w-full px-3 py-4 flex justify-center bg-gray-50 font-sans ${bebas.variable}`}>
       <div
         className="
           w-full max-w-7xl
@@ -137,7 +127,7 @@ export default function SponsorsStrip() {
         {/* Título */}
         <div className="flex items-center justify-center gap-4 mb-6 sm:mb-8">
             <div className="h-px w-8 sm:w-16 bg-gradient-to-r from-transparent to-[#C02485]/50"></div>
-            <p className="text-center text-[24px] sm:text-[32px] tracking-[0.1em] uppercase text-gray-800 font-bebas">
+            <p className="text-center text-[24px] sm:text-[32px] tracking-[0.1em] uppercase text-gray-800 font-[family-name:var(--font-bebas)]">
               Nuestros <span className="text-[#C02485]">Patrocinadores</span>
             </p>
             <div className="h-px w-8 sm:w-16 bg-gradient-to-l from-transparent to-[#C02485]/50"></div>
@@ -146,7 +136,7 @@ export default function SponsorsStrip() {
         {/* Contenedor Principal */}
         <div className="relative w-full flex items-center">
           
-          {/* Flecha Izquierda (Acelera hacia la derecha) */}
+          {/* Flecha Izquierda */}
           <div className="absolute left-0 z-20 h-full flex items-center bg-gradient-to-r from-white via-white/80 to-transparent pr-8 pl-2">
             <button 
               onMouseEnter={() => handleArrowEnter(-1)}
@@ -165,7 +155,7 @@ export default function SponsorsStrip() {
             </button>
           </div>
 
-          {/* Área Visible (Viewport) - Solo AQUÍ pausamos al hover */}
+          {/* Área Visible (Viewport) */}
           <div 
             className="w-full overflow-hidden mx-8 sm:mx-12 cursor-grab active:cursor-grabbing"
             onMouseEnter={() => setIsPaused(true)}
@@ -181,7 +171,7 @@ export default function SponsorsStrip() {
                   className="
                     flex-none
                     h-16 sm:h-20 md:h-24
-                    min-w-[120px] sm:min-w-[160px]
+                    w-[120px] sm:w-[160px] /* Ancho fijo para evitar CLS */
                     px-4 sm:px-6
                     rounded-2xl
                     bg-gray-50
@@ -190,27 +180,31 @@ export default function SponsorsStrip() {
                     group
                     transition-all duration-300
                     hover:bg-white hover:shadow-lg hover:border-[#C02485]/20 hover:-translate-y-1
+                    relative
                   "
                 >
-                  <img
-                    src={logo.src}
-                    alt={logo.alt}
-                    loading="lazy"
-                    draggable={false}
-                    className="
-                      max-h-12 sm:max-h-14 md:max-h-16 w-auto 
-                      object-contain 
-                      grayscale opacity-70 
-                      transition-all duration-500 
-                      group-hover:grayscale-0 group-hover:opacity-100 group-hover:scale-110
-                    "
-                  />
+                  {/* OPTIMIZACIÓN DE IMAGEN */}
+                  <div className="relative w-full h-full max-h-12 sm:max-h-14 md:max-h-16">
+                    <Image
+                      src={logo.src}
+                      alt={logo.alt}
+                      fill
+                      className="
+                        object-contain 
+                        grayscale opacity-70 
+                        transition-all duration-500 
+                        group-hover:grayscale-0 group-hover:opacity-100 group-hover:scale-110
+                      "
+                      sizes="(max-width: 768px) 120px, 160px"
+                      loading="lazy"
+                    />
+                  </div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Flecha Derecha (Acelera hacia la izquierda) */}
+          {/* Flecha Derecha */}
           <div className="absolute right-0 z-20 h-full flex items-center bg-gradient-to-l from-white via-white/80 to-transparent pl-8 pr-2">
              <button 
                onMouseEnter={() => handleArrowEnter(1)}

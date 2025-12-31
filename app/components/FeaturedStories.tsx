@@ -1,15 +1,23 @@
 "use client";
 
 import React from "react";
+import { Bebas_Neue } from "next/font/google"; // 1. Fuente optimizada
 import { Trophy, ArrowRight, Calendar } from "lucide-react";
+
+// 2. Configuración de fuente (Sin bloqueo)
+const bebas = Bebas_Neue({
+  subsets: ["latin"],
+  weight: "400",
+  display: "swap",
+  variable: "--font-bebas",
+});
 
 export default function FeaturedStories() {
   return (
-    <section className="w-full px-3 py-4 flex justify-center bg-[#0a0a0a] font-sans">
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
-        .font-bebas { font-family: 'Bebas Neue', sans-serif; }
-      `}</style>
+    // 3. Inyección de variable de fuente
+    <section className={`w-full px-3 py-4 flex justify-center bg-[#0a0a0a] font-sans ${bebas.variable}`}>
+      
+      {/* <style> Eliminado para evitar bloqueo de renderizado */}
 
       <div
         className="
@@ -37,7 +45,7 @@ export default function FeaturedStories() {
                 text-[32px] sm:text-[48px] lg:text-[58px]
                 leading-[0.95]
                 tracking-wide
-                font-bebas
+                font-[family-name:var(--font-bebas)]
                 text-white
               "
             >
@@ -47,11 +55,13 @@ export default function FeaturedStories() {
               </span>
             </h2>
 
-            {/* Paginación Visual */}
+            {/* Paginación Visual OPTIMIZADA */}
+            {/* CORRECCIÓN A11Y: Cambiamos <button> por <div> porque están dentro de aria-hidden="true".
+                Esto evita que el teclado haga foco en elementos invisibles para el lector de pantalla. */}
             <div className="hidden sm:flex items-center gap-3 bg-white/5 px-4 py-2 rounded-full border border-white/10" aria-hidden="true">
-              <button className="h-2.5 w-2.5 rounded-full bg-[#C02485] shadow-[0_0_10px_#C02485]" />
-              <button className="h-2.5 w-2.5 rounded-full bg-white/20 hover:bg-white/50 transition-colors" />
-              <button className="h-2.5 w-2.5 rounded-full bg-white/20 hover:bg-white/50 transition-colors" />
+              <div className="h-2.5 w-2.5 rounded-full bg-[#C02485] shadow-[0_0_10px_#C02485]" />
+              <div className="h-2.5 w-2.5 rounded-full bg-white/20 hover:bg-white/50 transition-colors" />
+              <div className="h-2.5 w-2.5 rounded-full bg-white/20 hover:bg-white/50 transition-colors" />
             </div>
           </div>
 
@@ -84,7 +94,7 @@ export default function FeaturedStories() {
                   leading-[1]
                   tracking-wide
                   mb-5
-                  font-bebas
+                  font-[family-name:var(--font-bebas)]
                   text-white group-hover:text-white transition-colors
                 "
               >
@@ -97,11 +107,14 @@ export default function FeaturedStories() {
               </p>
 
               <div>
-                <button className="
-                    inline-flex items-center gap-2 
-                    text-white text-sm font-bold uppercase tracking-[0.2em] 
-                    group/btn hover:text-[#C02485] transition-colors
-                ">
+                <button 
+                    className="
+                        inline-flex items-center gap-2 
+                        text-white text-sm font-bold uppercase tracking-[0.2em] 
+                        group/btn hover:text-[#C02485] transition-colors
+                    "
+                    aria-label="Leer historia completa sobre la experiencia de los corredores"
+                >
                     Leer historia completa 
                     <ArrowRight size={16} className="group-hover/btn:translate-x-1 transition-transform" />
                 </button>

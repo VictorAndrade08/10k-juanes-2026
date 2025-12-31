@@ -1,6 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image"; // Optimización de imágenes
+import { Bebas_Neue } from "next/font/google"; // Optimización de fuentes
+
+// Configuración de fuente
+const bebas = Bebas_Neue({
+  subsets: ["latin"],
+  weight: "400",
+  display: "swap",
+  variable: "--font-bebas",
+});
 
 type TimeLeft = {
   days: number;
@@ -9,14 +19,16 @@ type TimeLeft = {
   seconds: number;
 };
 
-function getTimeLeft(): TimeLeft {
-  // Fecha: 6 de febrero de 2026 a las 19:00
+// Estado inicial en ceros para evitar diferencias entre Servidor y Cliente (Hydration Mismatch)
+const INITIAL_TIME: TimeLeft = { days: 0, hours: 0, minutes: 0, seconds: 0 };
+
+function calculateTimeLeft(): TimeLeft {
   const eventDate = new Date("2026-02-06T19:00:00-05:00").getTime();
   const now = Date.now();
   const diff = eventDate - now;
 
   if (diff <= 0) {
-    return { days: 0, hours: 0, minutes: 0, seconds: 0 };
+    return INITIAL_TIME;
   }
 
   return {
@@ -30,12 +42,17 @@ function getTimeLeft(): TimeLeft {
 const pad = (num: number) => num.toString().padStart(2, "0");
 
 export default function CountdownStrip() {
-  const [timeLeft, setTimeLeft] = useState<TimeLeft>(getTimeLeft);
-  const [isMounted, setIsMounted] = useState(false);
+  // Inicializamos con 0 para que el HTML del servidor coincida con el inicial del cliente
+  const [timeLeft, setTimeLeft] = useState<TimeLeft>(INITIAL_TIME);
 
   useEffect(() => {
-    setIsMounted(true);
-    const timer = setInterval(() => setTimeLeft(getTimeLeft()), 1000);
+    // Calcular inmediatamente al montar
+    setTimeLeft(calculateTimeLeft());
+
+    const timer = setInterval(() => {
+      setTimeLeft(calculateTimeLeft());
+    }, 1000);
+
     return () => clearInterval(timer);
   }, []);
 
@@ -46,15 +63,9 @@ export default function CountdownStrip() {
     { label: "Segundos", value: pad(timeLeft.seconds) },
   ];
 
-  if (!isMounted) return null;
-
   return (
-    <section className="w-full px-3 py-4 flex justify-center bg-gray-50 font-sans">
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
-        .font-bebas { font-family: 'Bebas Neue', sans-serif; }
-      `}</style>
-
+    // Inyectamos la variable de fuente aquí
+    <section className={`w-full px-3 py-4 flex justify-center bg-gray-50 font-sans ${bebas.variable}`}>
       <div className="
         relative w-full max-w-7xl 
         rounded-[24px] sm:rounded-[32px] 
@@ -70,7 +81,7 @@ export default function CountdownStrip() {
 
         <div className="relative z-10">
           
-          {/* HEADER CON GRID (Texto Izq - Imagen Der) */}
+          {/* HEADER CON GRID */}
           <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_0.8fr] gap-8 lg:gap-12 items-center mb-10">
             
             {/* Columna Texto */}
@@ -82,7 +93,7 @@ export default function CountdownStrip() {
                  </p>
               </div>
 
-              <h2 className="text-[36px] sm:text-[48px] lg:text-[60px] leading-[1] text-gray-900 font-bebas mb-4 tracking-tight">
+              <h2 className="text-[36px] sm:text-[48px] lg:text-[60px] leading-[1] text-gray-900 font-[family-name:var(--font-bebas)] mb-4 tracking-tight">
                 Cuenta regresiva para la <br className="hidden sm:block"/>
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#C02485] to-[#E5006D]">
                   10K Ruta de los Tres Juanes 2026
@@ -95,7 +106,7 @@ export default function CountdownStrip() {
               </p>
             </div>
 
-            {/* Columna Imagen (Restaurada y Optimizada) */}
+            {/* Columna Imagen OPTIMIZADA */}
             <div className="relative flex justify-center lg:justify-end">
               <div className="
                 relative w-full max-w-[400px] 
@@ -106,18 +117,22 @@ export default function CountdownStrip() {
                 p-4
                 transform transition-transform hover:scale-[1.02] duration-500
               ">
-                <img
+                {/* CRÍTICO: Definimos width/height explícitos basados en el aspecto original (aprox 3.5:1).
+                   Next.js redimensionará la imagen de 11,000px a 400px, ahorrando MBs de datos.
+                */}
+                <Image
                   src="/imagen1.webp"
                   alt="Identidad 10K Ruta de los Tres Juanes"
+                  width={400} 
+                  height={115}
                   className="w-full h-auto object-contain select-none pointer-events-none drop-shadow-sm"
                   loading="lazy"
-                  draggable={false}
                 />
               </div>
             </div>
           </div>
 
-          {/* CONTADOR (Debajo, como en el original pero mejorado) */}
+          {/* CONTADOR */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
             {blocks.map((item) => (
               <div
@@ -134,7 +149,11 @@ export default function CountdownStrip() {
                     group
                 "
               >
-                <span className="text-[48px] sm:text-[64px] leading-[0.9] text-[#C02485] font-bebas group-hover:scale-110 transition-transform duration-300">
+                {/* suppressHydrationWarning evita errores si hay milisegundos de diferencia entre server/client */}
+                <span 
+                    className="text-[48px] sm:text-[64px] leading-[0.9] text-[#C02485] font-[family-name:var(--font-bebas)] group-hover:scale-110 transition-transform duration-300"
+                    suppressHydrationWarning
+                >
                   {item.value}
                 </span>
                 <span className="mt-2 text-[10px] sm:text-xs tracking-[0.2em] uppercase text-gray-500 font-bold">

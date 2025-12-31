@@ -2,19 +2,56 @@
 
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
+import Link from "next/link";
+import { Bebas_Neue } from "next/font/google";
 
+// --- CONFIGURACIÓN DE FUENTE (Optimización Core Web Vitals) ---
+const bebas = Bebas_Neue({
+  subsets: ["latin"],
+  weight: "400",
+  display: "swap",
+  variable: "--font-bebas",
+});
+
+// --- SUB-COMPONENTE LOGO (Para manejar el error de imagen sin romper TS) ---
+const Logo = ({ className }: { className?: string }) => {
+  const [hasError, setHasError] = useState(false);
+
+  if (hasError) {
+    // Fallback SVG si la imagen falla (Renderizado seguro)
+    return (
+      <svg 
+        xmlns="http://www.w3.org/2000/svg" 
+        viewBox="0 0 24 24" 
+        fill="white" 
+        className={className}
+        aria-hidden="true"
+      >
+        <path d="M11.25 4.533A9.707 9.707 0 006 3a9.735 9.735 0 00-3.25.555.75.75 0 00-.5.707v14.25a.75.75 0 001 .707A8.237 8.237 0 016 18.75c1.995 0 3.823.707 5.25 1.886V4.533zM12.75 20.636A8.214 8.214 0 0118 18.75c.966 0 1.89.166 2.75.47V4.982c-.371-.16-.763-.298-1.168-.414a9.721 9.721 0 00-4.082 0 8.234 8.234 0 00-2.75 1.868v14.2z" />
+      </svg>
+    );
+  }
+
+  return (
+    <img
+      src="/white.svg"
+      alt="Logo 10K"
+      width={28}
+      height={28}
+      className={`${className} object-contain`}
+      onError={() => setHasError(true)}
+      loading="eager"
+    />
+  );
+};
+
+// --- COMPONENTE PRINCIPAL ---
 export default function Header() {
   const [open, setOpen] = useState(false);
 
   return (
     <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
-        .font-bebas { font-family: 'Bebas Neue', sans-serif; }
-      `}</style>
-
-      {/* ================= HEADER ================= */}
-      <header className="relative mt-4 sm:mt-5 z-50 w-full flex justify-center px-4 font-sans">
+      <header className={`relative mt-4 sm:mt-5 z-50 w-full flex justify-center px-4 font-sans ${bebas.variable}`}>
         <div
           className="
             w-full max-w-7xl mx-auto
@@ -29,7 +66,7 @@ export default function Header() {
           "
         >
           {/* IZQUIERDA → HOME */}
-          <a
+          <Link
             href="/"
             aria-label="Volver al inicio"
             className="flex items-center gap-2 sm:gap-3 lg:gap-4 cursor-pointer group flex-shrink-0"
@@ -45,19 +82,8 @@ export default function Header() {
                 group-hover:scale-105 transition-transform duration-300
               "
             >
-              <img
-                src="/white.svg"
-                alt="Logo"
-                className="w-6 h-6 sm:w-7 sm:h-7 object-contain"
-                loading="eager"
-                onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                    if (target.parentElement) {
-                        target.parentElement.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" class="w-6 h-6"><path d="M11.25 4.533A9.707 9.707 0 006 3a9.735 9.735 0 00-3.25.555.75.75 0 00-.5.707v14.25a.75.75 0 001 .707A8.237 8.237 0 016 18.75c1.995 0 3.823.707 5.25 1.886V4.533zM12.75 20.636A8.214 8.214 0 0118 18.75c.966 0 1.89.166 2.75.47V4.982c-.371-.16-.763-.298-1.168-.414a9.721 9.721 0 00-4.082 0 8.234 8.234 0 00-2.75 1.868v14.2z" /></svg>';
-                    }
-                }}
-              />
+              {/* Usamos el componente seguro Logo */}
+              <Logo className="w-6 h-6 sm:w-7 sm:h-7" />
             </div>
 
             <div className="leading-tight select-none flex flex-col justify-center">
@@ -67,7 +93,7 @@ export default function Header() {
                   text-[18px] lg:text-[22px] xl:text-[26px]
                   uppercase tracking-[0.05em]
                   text-[#111]
-                  font-bebas
+                  font-[family-name:var(--font-bebas)]
                   group-hover:text-[#C02485] transition-colors
                   whitespace-nowrap
                 "
@@ -79,7 +105,7 @@ export default function Header() {
                 Ambato · Ecuador · Carrera nocturna 2026
               </p>
             </div>
-          </a>
+          </Link>
 
           {/* ================= DESKTOP (LG+) ================= */}
           <div className="hidden lg:flex items-center gap-2 xl:gap-4 flex-shrink-0">
@@ -97,7 +123,7 @@ export default function Header() {
               6 Feb 2026
             </span>
 
-            <a
+            <Link
               href="/reglamento"
               className="
                 px-4 py-2 lg:text-[11px] xl:text-xs font-bold
@@ -109,9 +135,9 @@ export default function Header() {
               "
             >
               Reglamento
-            </a>
+            </Link>
 
-            <a
+            <Link
               href="/verificar"
               className="
                 px-4 py-2 lg:text-[11px] xl:text-xs font-bold
@@ -123,9 +149,9 @@ export default function Header() {
               "
             >
               Verificar
-            </a>
+            </Link>
 
-            <a
+            <Link
               href="/inscripcion"
               className="
                 px-5 py-2.5 lg:text-[11px] xl:text-xs font-bold
@@ -137,7 +163,7 @@ export default function Header() {
               "
             >
               Inscribirse
-            </a>
+            </Link>
           </div>
 
           {/* ================= BURGER (LG-) ================= */}
@@ -168,17 +194,10 @@ export default function Header() {
             <div className="flex items-center justify-between mb-8">
               <div className="flex items-center gap-3">
                  <div className="w-10 h-10 rounded-xl bg-[#C02485] flex items-center justify-center">
-                    <img 
-                        src="/white.svg" 
-                        alt="Logo" 
-                        className="w-6 h-6 object-contain" 
-                        onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.style.display = 'none';
-                        }} 
-                    />
+                    {/* Reutilizamos el componente Logo seguro */}
+                    <Logo className="w-6 h-6" />
                  </div>
-                 <span className="text-sm uppercase tracking-[0.2em] text-white/80 font-bold font-bebas">
+                 <span className="text-sm uppercase tracking-[0.2em] text-white/80 font-bold font-[family-name:var(--font-bebas)]">
                     Menú
                  </span>
               </div>
@@ -192,22 +211,23 @@ export default function Header() {
             </div>
 
             <nav className="flex flex-col gap-4">
-              <a href="/" className="text-xl font-bold py-3 border-b border-white/10 text-white/90">
+              <Link href="/" className="text-xl font-bold py-3 border-b border-white/10 text-white/90" onClick={() => setOpen(false)}>
                 Inicio
-              </a>
+              </Link>
 
-              <a href="/reglamento" className="text-xl font-bold py-3 border-b border-white/10 text-white/90">
+              <Link href="/reglamento" className="text-xl font-bold py-3 border-b border-white/10 text-white/90" onClick={() => setOpen(false)}>
                 Reglamento
-              </a>
+              </Link>
 
-              <a
+              <Link
                 href="/verificar"
                 className="text-xl font-bold py-3 border-b border-white/10 text-[#E5006D]"
+                onClick={() => setOpen(false)}
               >
                 Verificar inscripción
-              </a>
+              </Link>
               
-              <a
+              <Link
                 href="/inscripcion"
                 className="
                   mt-6
@@ -220,9 +240,10 @@ export default function Header() {
                   shadow-lg
                   active:scale-95 transition-transform
                 "
+                onClick={() => setOpen(false)}
               >
                 Inscribirse Ahora
-              </a>
+              </Link>
             </nav>
           </div>
         </div>

@@ -1,15 +1,24 @@
 "use client";
 
 import React from "react";
+import Link from "next/link"; // 1. Navegación SPA instantánea
+import { Bebas_Neue } from "next/font/google"; // 2. Fuente optimizada
 import { Scale, FileCheck, ArrowRight, ShieldCheck } from "lucide-react";
+
+// Configuración de la fuente (Carga eficiente sin bloqueo)
+const bebas = Bebas_Neue({
+  subsets: ["latin"],
+  weight: "400",
+  display: "swap",
+  variable: "--font-bebas",
+});
 
 export default function ReglamentoSection() {
   return (
-    <section id="reglamento" className="w-full px-3 py-4 flex justify-center bg-[#0a0a0a] font-sans">
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
-        .font-bebas { font-family: 'Bebas Neue', sans-serif; }
-      `}</style>
+    // 3. Inyectamos la variable de fuente en el contenedor principal
+    <section id="reglamento" className={`w-full px-3 py-4 flex justify-center bg-[#0a0a0a] font-sans ${bebas.variable}`}>
+      
+      {/* Eliminamos el <style> @import que bloqueaba el renderizado */}
 
       <div
         className="
@@ -41,8 +50,8 @@ export default function ReglamentoSection() {
                Normativa Oficial
             </p>
 
-            {/* Título */}
-            <h2 className="text-[36px] sm:text-[52px] lg:text-[64px] leading-[0.95] mb-6 font-bebas text-white tracking-wide">
+            {/* Título usando la variable de fuente */}
+            <h2 className="text-[36px] sm:text-[52px] lg:text-[64px] leading-[0.95] mb-6 font-[family-name:var(--font-bebas)] text-white tracking-wide">
                Reglamento General <br className="hidden sm:block" />
                <span className="text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400">
                  10K Ruta de los Tres Juanes 2026
@@ -54,9 +63,9 @@ export default function ReglamentoSection() {
                Para garantizar una competencia justa y segura, es obligatorio conocer las reglas. Aquí encontrarás detalles sobre categorías, chips de cronometraje, puntos de hidratación, descalificaciones y premiación.
             </p>
 
-            {/* Botones de Acción */}
+            {/* Botones de Acción (Reemplazados <a> por <Link>) */}
             <div className="flex flex-col sm:flex-row gap-4 w-full justify-center">
-                <a
+                <Link
                     href="/reglamento"
                     className="
                     inline-flex items-center justify-center gap-2
@@ -71,9 +80,9 @@ export default function ReglamentoSection() {
                     "
                 >
                     Leer Reglamento Completo <ArrowRight size={18} />
-                </a>
+                </Link>
                 
-                 <a
+                 <Link
                     href="/faq"
                     className="
                     inline-flex items-center justify-center gap-2
@@ -87,7 +96,7 @@ export default function ReglamentoSection() {
                     "
                 >
                     Preguntas Frecuentes
-                </a>
+                </Link>
             </div>
             
             {/* Pie de página con iconos de confianza */}

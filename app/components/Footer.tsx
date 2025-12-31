@@ -1,16 +1,25 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
+import Image from "next/image"; // 1. Optimización de imagen
+import { Bebas_Neue } from "next/font/google"; // 2. Carga de fuente sin bloqueo
 import { Facebook, Instagram, MessageCircle } from "lucide-react";
+
+// Configuración de la fuente
+const bebas = Bebas_Neue({
+  subsets: ["latin"],
+  weight: "400",
+  display: "swap",
+  variable: "--font-bebas",
+});
 
 export default function Footer() {
   return (
-    // 🔥 IMPORTANTE: Aquí agregamos id="site-footer" para que el botón flotante lo detecte
-    <footer id="site-footer" className="w-full px-3 py-4 flex justify-center bg-gray-50 font-sans">
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
-        .font-bebas { font-family: 'Bebas Neue', sans-serif; }
-      `}</style>
+    // 3. Inyectamos la fuente y MANTENEMOS el ID crítico para el botón flotante
+    <footer id="site-footer" className={`w-full px-3 py-4 flex justify-center bg-gray-50 font-sans ${bebas.variable}`}>
+      
+      {/* Eliminado <style> @import para evitar bloqueo */}
 
       <div
         className="
@@ -26,7 +35,6 @@ export default function Footer() {
           gap-12 lg:gap-20
           relative
           overflow-hidden
-          /* Optimización de renderizado */
           transform-gpu translate-z-0
         "
       >
@@ -57,24 +65,22 @@ export default function Footer() {
             "
             aria-hidden="true"
           >
-            {/* ✅ TU LOGO ORIGINAL */}
-            <img
+            {/* LOGO OPTIMIZADO:
+                Usamos next/image con dimensiones explícitas.
+                Esto elimina el CLS y evita errores de hidratación.
+            */}
+            <Image
               src="/white.svg"
-              alt="Logo 10K"
+              alt="Logo 10K Ruta de los Tres Juanes"
+              width={40}
+              height={40}
               className="w-8 h-8 sm:w-10 sm:h-10 object-contain"
               loading="lazy"
-              decoding="async"
-              onError={(e) => {
-                e.currentTarget.style.display = 'none';
-                if (e.currentTarget.parentElement) {
-                    e.currentTarget.parentElement.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" class="w-8 h-8"><path d="M11.25 4.533A9.707 9.707 0 006 3a9.735 9.735 0 00-3.25.555.75.75 0 00-.5.707v14.25a.75.75 0 001 .707A8.237 8.237 0 016 18.75c1.995 0 3.823.707 5.25 1.886V4.533zM12.75 20.636A8.214 8.214 0 0118 18.75c.966 0 1.89.166 2.75.47V4.982c-.371-.16-.763-.298-1.168-.414a9.721 9.721 0 00-4.082 0 8.234 8.234 0 00-2.75 1.868v14.2z" /></svg>';
-                }
-              }}
             />
           </div>
 
           <div className="flex flex-col justify-center">
-            <h3 className="text-[28px] sm:text-[36px] leading-none font-bebas tracking-wide mb-2">
+            <h3 className="text-[28px] sm:text-[36px] leading-none font-[family-name:var(--font-bebas)] tracking-wide mb-2">
               Ruta de los Tres Juanes 2026
             </h3>
 
@@ -97,19 +103,20 @@ export default function Footer() {
         >
           {/* Enlaces Rápidos */}
           <div>
-            <h4 className="text-lg md:text-xl mb-6 font-bebas tracking-wide text-white">
+            <h4 className="text-lg md:text-xl mb-6 font-[family-name:var(--font-bebas)] tracking-wide text-white">
               Enlaces Rápidos
             </h4>
             <ul className="space-y-3 text-gray-400">
-              <li><a href="#inscripcion" className="hover:text-[#C02485] transition-colors duration-200">Inscripción</a></li>
-              <li><a href="#reglamento" className="hover:text-[#C02485] transition-colors duration-200">Reglamento</a></li>
-              <li><a href="#faq" className="hover:text-[#C02485] transition-colors duration-200">Preguntas frecuentes</a></li>
+              {/* Usamos Link o <a> según corresponda. Si es scroll interno, <a> está bien. */}
+              <li><Link href="/#inscripcion" className="hover:text-[#C02485] transition-colors duration-200">Inscripción</Link></li>
+              <li><Link href="/reglamento" className="hover:text-[#C02485] transition-colors duration-200">Reglamento</Link></li>
+              <li><Link href="/faq" className="hover:text-[#C02485] transition-colors duration-200">Preguntas frecuentes</Link></li>
             </ul>
           </div>
 
           {/* Patrocinadores */}
           <div>
-            <h4 className="text-lg md:text-xl mb-6 font-bebas tracking-wide text-white">
+            <h4 className="text-lg md:text-xl mb-6 font-[family-name:var(--font-bebas)] tracking-wide text-white">
               Patrocinadores
             </h4>
             <ul className="space-y-3 text-gray-400">
@@ -124,7 +131,7 @@ export default function Footer() {
 
           {/* Conéctate */}
           <div>
-            <h4 className="text-lg md:text-xl mb-6 font-bebas tracking-wide text-white">
+            <h4 className="text-lg md:text-xl mb-6 font-[family-name:var(--font-bebas)] tracking-wide text-white">
               Conéctate
             </h4>
             <ul className="space-y-3">
@@ -134,7 +141,7 @@ export default function Footer() {
                   className="flex items-center gap-2 text-gray-400 hover:text-[#25D366] transition-colors duration-200"
                   target="_blank"
                   rel="noopener noreferrer"
-                  aria-label="Abrir WhatsApp"
+                  aria-label="Contactar por WhatsApp"
                 >
                   <MessageCircle size={18} /> WhatsApp
                 </a>
@@ -145,7 +152,7 @@ export default function Footer() {
                   className="flex items-center gap-2 text-gray-400 hover:text-[#E1306C] transition-colors duration-200"
                   target="_blank"
                   rel="noopener noreferrer"
-                  aria-label="Abrir Instagram"
+                  aria-label="Seguir en Instagram"
                 >
                   <Instagram size={18} /> Instagram
                 </a>
@@ -156,7 +163,7 @@ export default function Footer() {
                   className="flex items-center gap-2 text-gray-400 hover:text-[#1877F2] transition-colors duration-200"
                   target="_blank"
                   rel="noopener noreferrer"
-                  aria-label="Abrir Facebook"
+                  aria-label="Seguir en Facebook"
                 >
                   <Facebook size={18} /> Facebook
                 </a>

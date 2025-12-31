@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image"; // IMPORTANTE: Usamos el componente nativo
 
 type GalleryItem = { src: string; alt: string };
 
@@ -22,53 +23,43 @@ const IMAGES: GalleryItem[] = [
   { src: "https://mandarinas.10kindependenciadeambato.com/wp-content/uploads/2025/12/juanes15.jpg", alt: "Corredor 15" },
 ];
 
-// 🔄 Mezclar imágenes aleatoriamente
-function shuffleFast<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
 export default function TopGallery() {
-  const [subset, setSubset] = useState<GalleryItem[]>(() => IMAGES.slice(0, 10));
-  const didShuffle = useRef(false);
-
-  useEffect(() => {
-    if (!didShuffle.current) {
-      didShuffle.current = true;
-      setSubset(shuffleFast(IMAGES).slice(0, 12)); // Mostramos un poco más para pantallas anchas
-    }
-  }, []);
-
-  const belt = useMemo(() => [...subset, ...subset], [subset]);
+  // NOTA: Eliminamos el estado de 'shuffle' para evitar Hydration Errors.
+  // Es mejor renderizar estático para PageSpeed y evitar saltos visuales.
+  
+  // Duplicamos la lista para el efecto infinito "seamless"
+  const belt = useMemo(() => [...IMAGES, ...IMAGES], []);
+  
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
-  const active = activeIndex === null ? null : subset[activeIndex];
+  const active = activeIndex === null ? null : IMAGES[activeIndex];
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
 
   // Navegación con teclado
   useEffect(() => {
     if (!active) return;
-    const t = setTimeout(() => closeBtnRef.current?.focus(), 20);
+    // Focus para accesibilidad
+    const t = setTimeout(() => closeBtnRef.current?.focus(), 50);
+    
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setActiveIndex(null);
-      if (e.key === "ArrowRight") setActiveIndex(v => (v === null ? 0 : (v + 1) % subset.length));
-      if (e.key === "ArrowLeft") setActiveIndex(v => (v === null ? 0 : (v - 1 + subset.length) % subset.length));
+      if (e.key === "ArrowRight") setActiveIndex(v => (v === null ? 0 : (v + 1) % IMAGES.length));
+      if (e.key === "ArrowLeft") setActiveIndex(v => (v === null ? 0 : (v - 1 + IMAGES.length) % IMAGES.length));
     };
     window.addEventListener("keydown", onKey);
     return () => {
       clearTimeout(t);
       window.removeEventListener("keydown", onKey);
     };
-  }, [active, subset.length]);
+  }, [active]);
 
-  // Pausar animación si no está visible (Performance)
+  // Performance: Pausar animación si no está en pantalla
   const marqueeRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const el = marqueeRef.current;
     if (!el) return;
+    
+    // IntersectionObserver desconecta la animación CSS cuando el usuario no la ve
+    // para ahorrar batería y CPU.
     const obs = new IntersectionObserver(
       entries => {
         for (const entry of entries) {
@@ -77,7 +68,7 @@ export default function TopGallery() {
           }
         }
       },
-      { threshold: 0.05 }
+      { threshold: 0.1 }
     );
     obs.observe(el);
     return () => obs.disconnect();
@@ -85,10 +76,9 @@ export default function TopGallery() {
 
   return (
     <>
-      {/* Ajuste: Padding vertical reducido (py-4 md:py-6) para integración compacta */}
       <section className="w-full px-3 py-4 md:py-6 flex justify-center bg-gray-50">
         <div className="w-full max-w-7xl">
-          {/* Contenedor Principal: Fondo oscuro elegante con borde sutil magenta */}
+          {/* Contenedor Principal */}
           <div className="
             relative overflow-hidden 
             rounded-[20px] sm:rounded-[32px] 
@@ -96,7 +86,7 @@ export default function TopGallery() {
             bg-[#1a1a1a] 
             shadow-lg
           ">
-            {/* Gradientes laterales para suavizar la entrada/salida de fotos */}
+            {/* Gradientes laterales */}
             <div className="pointer-events-none absolute inset-y-0 left-0 w-12 sm:w-20 bg-gradient-to-r from-[#1a1a1a] to-transparent z-10" />
             <div className="pointer-events-none absolute inset-y-0 right-0 w-12 sm:w-20 bg-gradient-to-l from-[#1a1a1a] to-transparent z-10" />
 
@@ -107,16 +97,16 @@ export default function TopGallery() {
                 className="flex gap-4 sm:gap-6 tg-marquee"
                 style={
                   {
-                    "--tgDuration": "25s",
-                    "--tgDurationMobile": "18s"
+                    "--tgDuration": "40s", // Un poco más lento para apreciar las fotos
+                    "--tgDurationMobile": "25s"
                   } as React.CSSProperties
                 }
               >
                 {belt.map((img, i) => (
                   <button
-                    key={i}
+                    key={i} // Usamos índice porque la lista es estática duplicada
                     type="button"
-                    onClick={() => setActiveIndex(i % subset.length)}
+                    onClick={() => setActiveIndex(i % IMAGES.length)}
                     className="
                       group relative 
                       w-[200px] sm:w-[260px] md:w-[320px] 
@@ -130,18 +120,20 @@ export default function TopGallery() {
                     "
                     aria-label={`Ver foto ${img.alt}`}
                   >
-                    <img
+                    {/* OPTIMIZACIÓN: Next Image con 'fill' y 'sizes' */}
+                    {/* 'sizes' le dice al navegador que descargue la versión pequeña, no la original de 2MB */}
+                    <Image
                       src={img.src}
                       alt={img.alt}
-                      className="absolute inset-0 w-full h-full object-cover opacity-80 transition-all duration-500 group-hover:opacity-100 group-hover:scale-110"
+                      fill
+                      sizes="(max-width: 640px) 200px, (max-width: 768px) 260px, 320px"
+                      className="object-cover opacity-80 transition-all duration-500 group-hover:opacity-100 group-hover:scale-110"
                       loading="lazy"
-                      draggable={false}
                     />
                     
-                    {/* Overlay gradiente marca al hacer hover */}
+                    {/* Overlay y efecto hover */}
                     <div className="absolute inset-0 bg-gradient-to-t from-[#C02485]/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                     
-                    {/* Icono de zoom al hover */}
                     <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                         <div className="bg-black/30 backdrop-blur-sm p-2 rounded-full">
                            <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -154,21 +146,20 @@ export default function TopGallery() {
               </div>
             </div>
 
-            {/* Animación CSS en línea */}
             <style>{`
               @keyframes tgMarquee {
                 0% { transform: translate3d(0, 0, 0); }
                 100% { transform: translate3d(-50%, 0, 0); }
               }
               .tg-marquee {
-                animation: tgMarquee var(--tgDuration, 25s) linear infinite;
+                animation: tgMarquee var(--tgDuration, 40s) linear infinite;
                 will-change: transform;
               }
               @media (hover: hover) {
                 .tg-marquee:hover { animation-play-state: paused; }
               }
               @media (max-width: 640px) {
-                .tg-marquee { animation-duration: var(--tgDurationMobile, 18s); }
+                .tg-marquee { animation-duration: var(--tgDurationMobile, 25s); }
               }
               @media (prefers-reduced-motion: reduce) {
                 .tg-marquee { animation: none; transform: none; }
@@ -181,68 +172,70 @@ export default function TopGallery() {
       {/* Modal - Fullscreen */}
       {active && (
         <div
-          className="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4"
+          className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-md flex items-center justify-center p-2 sm:p-4"
           onClick={() => setActiveIndex(null)}
           role="dialog"
           aria-modal="true"
         >
           <div
-            className="relative w-full max-w-5xl h-full max-h-[90vh] flex flex-col items-center justify-center"
+            className="relative w-full max-w-6xl h-full flex flex-col items-center justify-center"
             onClick={e => e.stopPropagation()}
           >
-            {/* Controles Superiores */}
-            <div className="absolute top-0 right-0 z-20 flex gap-3 p-4">
+            {/* Botón Cerrar */}
+            <div className="absolute top-4 right-4 z-50">
               <button
                 ref={closeBtnRef}
                 onClick={() => setActiveIndex(null)}
                 className="
-                    flex items-center gap-2 px-4 py-2 
+                    flex items-center justify-center w-12 h-12
                     rounded-full bg-white/10 hover:bg-[#C02485] 
-                    backdrop-blur-sm border border-white/20 
-                    text-white text-sm font-bold uppercase tracking-wider 
-                    transition-all active:scale-95
+                    backdrop-blur-md border border-white/20 
+                    text-white transition-all active:scale-90
                 "
+                aria-label="Cerrar galería"
               >
-                <span>Cerrar</span>
-                <span className="text-lg leading-none">×</span>
+                <span className="text-2xl leading-none">×</span>
               </button>
             </div>
 
-            {/* Navegación Lateral (Solo visible en Desktop para no tapar foto en móvil) */}
+            {/* Navegación Desktop */}
             <button
-                onClick={(e) => { e.stopPropagation(); setActiveIndex(v => (v === null ? 0 : (v - 1 + subset.length) % subset.length)); }}
-                className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 items-center justify-center rounded-full bg-white/10 hover:bg-[#C02485] text-white border border-white/20 transition-all z-20"
+                onClick={(e) => { e.stopPropagation(); setActiveIndex(v => (v === null ? 0 : (v - 1 + IMAGES.length) % IMAGES.length)); }}
+                className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 w-14 h-14 items-center justify-center rounded-full bg-white/10 hover:bg-[#C02485] text-white border border-white/20 transition-all z-20"
             >
                 ‹
             </button>
             <button
-                onClick={(e) => { e.stopPropagation(); setActiveIndex(v => (v === null ? 0 : (v + 1) % subset.length)); }}
-                className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 items-center justify-center rounded-full bg-white/10 hover:bg-[#C02485] text-white border border-white/20 transition-all z-20"
+                onClick={(e) => { e.stopPropagation(); setActiveIndex(v => (v === null ? 0 : (v + 1) % IMAGES.length)); }}
+                className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 w-14 h-14 items-center justify-center rounded-full bg-white/10 hover:bg-[#C02485] text-white border border-white/20 transition-all z-20"
             >
                 ›
             </button>
 
-            {/* Imagen Principal */}
-            <div className="relative w-full h-full rounded-[20px] overflow-hidden shadow-2xl bg-black border border-white/10">
-              <img
+            {/* Imagen Principal del Modal */}
+            <div className="relative w-full h-[80vh] sm:h-[85vh] rounded-[20px] overflow-hidden shadow-2xl bg-black/50">
+              {/* OPTIMIZACIÓN: Modal con alta calidad pero optimizado */}
+              <Image
                 src={active.src}
                 alt={active.alt}
-                className="absolute inset-0 w-full h-full object-contain"
-                loading="eager"
-                draggable={false}
+                fill
+                className="object-contain"
+                sizes="100vw"
+                priority // Prioridad alta porque el usuario la acaba de pedir
+                quality={85}
               />
               
-              {/* Controles Táctiles Invisibles (Zonas de toque para móvil) */}
-              <div className="md:hidden absolute inset-0 flex">
-                  <div className="w-1/3 h-full" onClick={(e) => { e.stopPropagation(); setActiveIndex(v => (v === null ? 0 : (v - 1 + subset.length) % subset.length)); }}></div>
-                  <div className="w-1/3 h-full" onClick={() => setActiveIndex(null)}></div> {/* Centro cierra */}
-                  <div className="w-1/3 h-full" onClick={(e) => { e.stopPropagation(); setActiveIndex(v => (v === null ? 0 : (v + 1) % subset.length)); }}></div>
+              {/* Zonas táctiles invisibles para móvil */}
+              <div className="md:hidden absolute inset-0 flex z-10">
+                  <div className="w-1/3 h-full" onClick={(e) => { e.stopPropagation(); setActiveIndex(v => (v === null ? 0 : (v - 1 + IMAGES.length) % IMAGES.length)); }}></div>
+                  <div className="w-1/3 h-full" onClick={() => setActiveIndex(null)}></div>
+                  <div className="w-1/3 h-full" onClick={(e) => { e.stopPropagation(); setActiveIndex(v => (v === null ? 0 : (v + 1) % IMAGES.length)); }}></div>
               </div>
             </div>
 
-            {/* Indicador de posición */}
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-black/50 backdrop-blur text-white/70 text-xs font-medium border border-white/10">
-                {activeIndex !== null ? activeIndex + 1 : 0} / {subset.length}
+            {/* Contador */}
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-black/60 backdrop-blur text-white text-sm font-medium border border-white/10">
+                {activeIndex !== null ? activeIndex + 1 : 0} / {IMAGES.length}
             </div>
           </div>
         </div>
