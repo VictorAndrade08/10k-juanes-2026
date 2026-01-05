@@ -219,8 +219,9 @@ export default function VerificarPage() {
                             <p className={`text-4xl ${bebasClassName} text-white`}>10K</p>
                             <p className="text-sm font-bold uppercase tracking-widest text-white/60">Distancia</p>
                         </div>
+                        {/* FECHA ACTUALIZADA AQUÍ */}
                         <div>
-                            <p className={`text-4xl ${bebasClassName} text-white`}>Feb 07</p>
+                            <p className={`text-4xl ${bebasClassName} text-white`}>Feb 06</p>
                             <p className="text-sm font-bold uppercase tracking-widest text-white/60">Fecha</p>
                         </div>
                         <div>
