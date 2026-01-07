@@ -1,11 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-// IMPORTANTE: Agregamos 'FirebaseApp' a los imports
+// FIX: Importamos los tipos necesarios de Firebase
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-// IMPORTANTE: Agregamos 'Auth' a los imports
-import { getAuth, onAuthStateChanged, signInAnonymously, Auth } from 'firebase/auth';
-// IMPORTANTE: Agregamos 'Firestore' a los imports
+import { getAuth, onAuthStateChanged, signInAnonymously, Auth, User as FirebaseUser } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, onSnapshot, getDoc, Firestore } from 'firebase/firestore';
 import {
   ShieldCheck,
@@ -29,7 +27,6 @@ import {
   History,
   ShieldAlert,
   Fingerprint,
-  User,
   Zap,
   Info,
   CreditCard,
@@ -56,7 +53,7 @@ const CREDENTIALS = {
 
 const AIRTABLE_CONFIG_KEY = 'verificador_ruta_3_juanes_config';
 
-// CORRECCIÓN TYPESCRIPT: Definimos los tipos explícitamente para evitar el error "implicitly has type any"
+// FIX: Definimos los tipos explícitamente. Ya no son 'any'.
 let app: FirebaseApp | undefined;
 let auth: Auth | undefined;
 let db: Firestore | undefined;
@@ -77,7 +74,7 @@ if (typeof window !== "undefined") {
 
 export default function BunkerPage() {
   const [isMounted, setIsMounted] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<FirebaseUser | null>(null);
   
   const [config, setConfig] = useState({
     apiKey: process.env.NEXT_PUBLIC_AIRTABLE_API_KEY || '',
@@ -126,7 +123,8 @@ export default function BunkerPage() {
     if (!isMounted || !auth) return;
     const initAuth = async () => {
       try {
-        await signInAnonymously(auth!); // El signo ! le dice a TS que confiamos en que auth existe
+        // FIX: Usamos ! para asegurar a TS que auth existe en este punto
+        await signInAnonymously(auth!); 
       } catch (err) { console.error("Auth Error:", err); }
     };
     initAuth();
@@ -296,7 +294,10 @@ Responde SOLO este JSON: {"documento": "123456", "monto": 30.00}`;
   };
 
   const processMatches = () => {
-    const regex = /(TRANSFERENC.*?|DEPOSITO.*?)\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{4,12})\s+[CD]/gs;
+    // FIX: Reemplacé el flag /s por [\s\S] para compatibilidad con versiones antiguas de JS/TS
+    // Antes: /(TRANSFERENC.*?|DEPOSITO.*?)\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{4,12})\s+[CD]/gs;
+    const regex = /(TRANSFERENC[\s\S]*?|DEPOSITO[\s\S]*?)\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{4,12})\s+[CD]/g;
+    
     let match;
     const bankEntries = [];
     const seenBankDocs = new Set();
@@ -305,6 +306,7 @@ Responde SOLO este JSON: {"documento": "123456", "monto": 30.00}`;
     while ((match = regex.exec(bankData)) !== null) {
       const fullConcept = match[1].replace(/\n/g, ' ').trim();
       const docNum = match[3];
+      // FIX: Regex compatible
       const depositorName = fullConcept.replace(/(TRANSFERENC\s+IA\s+(DIRECTA|INTERBANCARI)\s+A?\s+DE\s+|DEP\s+CNB\s+)/i, '').trim();
 
       if (seenBankDocs.has(docNum)) internalDuplicatesBank.add(docNum);
@@ -331,9 +333,9 @@ Responde SOLO este JSON: {"documento": "123456", "monto": 30.00}`;
       if (!matchingRecord && bank.depositor && bank.depositor.length > 5) {
         matchingRecord = airtableRecords.find(r => {
           if (assignedRecordIds.has(r.id)) return false;
-          const crmParts = r.nombre.toLowerCase().split(' ').filter(p => p.length > 3);
+          const crmParts = r.nombre.toLowerCase().split(' ').filter((p: string) => p.length > 3);
           const bankName = bank.depositor.toLowerCase();
-          return crmParts.filter(part => bankName.includes(part)).length >= 2;
+          return crmParts.filter((part: string) => bankName.includes(part)).length >= 2;
         });
         if (matchingRecord) matchType = 'nombre';
       }
@@ -344,9 +346,9 @@ Responde SOLO este JSON: {"documento": "123456", "monto": 30.00}`;
 
       let nameMismatch = false;
       if (matchingRecord && matchType === 'documento' && bank.depositor) {
-        const crmParts = matchingRecord.nombre.toLowerCase().split(' ').filter(p => p.length > 3);
+        const crmParts = matchingRecord.nombre.toLowerCase().split(' ').filter((p: string) => p.length > 3);
         const bankName = bank.depositor.toLowerCase();
-        nameMismatch = !crmParts.some(part => bankName.includes(part));
+        nameMismatch = !crmParts.some((part: string) => bankName.includes(part));
       }
 
       return {
@@ -363,7 +365,7 @@ Responde SOLO este JSON: {"documento": "123456", "monto": 30.00}`;
   };
 
   const confirmInCRM = async (recordId: string, bankDoc: string, athleteName: string, amount: number) => {
-    if (!user || !db) return; // Aseguramos que db existe
+    if (!user || !db) return; 
     setLoading(true);
     try {
       const historyRef = doc(db, 'artifacts', appId, 'public', 'data', 'verified_receipts', bankDoc);
