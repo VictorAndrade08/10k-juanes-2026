@@ -1,9 +1,12 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, onAuthStateChanged, signInAnonymously } from 'firebase/auth';
-import { getFirestore, collection, doc, setDoc, onSnapshot, getDoc } from 'firebase/firestore';
+// IMPORTANTE: Agregamos 'FirebaseApp' a los imports
+import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
+// IMPORTANTE: Agregamos 'Auth' a los imports
+import { getAuth, onAuthStateChanged, signInAnonymously, Auth } from 'firebase/auth';
+// IMPORTANTE: Agregamos 'Firestore' a los imports
+import { getFirestore, collection, doc, setDoc, onSnapshot, getDoc, Firestore } from 'firebase/firestore';
 import {
   ShieldCheck,
   Upload,
@@ -39,7 +42,6 @@ import {
 
 // --- CONFIGURACIÓN MAESTRA ---
 
-// NOTA: Usamos acceso directo a process.env para asegurar que Next.js inyecte los valores correctamente.
 const CREDENTIALS = {
   FIREBASE: {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
@@ -54,10 +56,12 @@ const CREDENTIALS = {
 
 const AIRTABLE_CONFIG_KEY = 'verificador_ruta_3_juanes_config';
 
-// Inicialización de Firebase
-let app, auth, db;
+// CORRECCIÓN TYPESCRIPT: Definimos los tipos explícitamente para evitar el error "implicitly has type any"
+let app: FirebaseApp | undefined;
+let auth: Auth | undefined;
+let db: Firestore | undefined;
+
 if (typeof window !== "undefined") {
-  // Verificamos si la key existe antes de intentar iniciar
   if (CREDENTIALS.FIREBASE.apiKey) {
     try {
         app = getApps().length === 0 ? initializeApp(CREDENTIALS.FIREBASE) : getApp();
@@ -75,11 +79,10 @@ export default function BunkerPage() {
   const [isMounted, setIsMounted] = useState(false);
   const [user, setUser] = useState<any>(null);
   
-  // CONFIGURACIÓN INICIAL: Lee de variables de entorno o deja vacío
   const [config, setConfig] = useState({
     apiKey: process.env.NEXT_PUBLIC_AIRTABLE_API_KEY || '',
     baseId: process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID || 'appA0xfrSZyNTgiLV',
-    tableName: process.env.NEXT_PUBLIC_AIRTABLE_TABLE_ID || 'CRM 10k', // Ajuste para usar variable si existe, o fallback
+    tableName: process.env.NEXT_PUBLIC_AIRTABLE_TABLE_ID || 'CRM 10k',
     filterStage: 'Inscrito Pago x Verificar'
   });
 
@@ -102,19 +105,16 @@ export default function BunkerPage() {
     const saved = localStorage.getItem(AIRTABLE_CONFIG_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
-      // Si el localStorage tiene una key guardada, la usa. Si no, usa la del env.
       setConfig(prev => ({ 
         ...prev, 
         ...parsed,
         apiKey: parsed.apiKey || process.env.NEXT_PUBLIC_AIRTABLE_API_KEY || ''
       }));
       
-      // Si ni el storage ni el env tienen key, abre el modal
       if (!parsed.apiKey && !process.env.NEXT_PUBLIC_AIRTABLE_API_KEY) {
         setIsConfigOpen(true);
       }
     } else {
-      // Primera vez: si no hay env vars, abrir modal
       if (!process.env.NEXT_PUBLIC_AIRTABLE_API_KEY) {
         setIsConfigOpen(true);
       }
@@ -126,11 +126,11 @@ export default function BunkerPage() {
     if (!isMounted || !auth) return;
     const initAuth = async () => {
       try {
-        await signInAnonymously(auth);
+        await signInAnonymously(auth!); // El signo ! le dice a TS que confiamos en que auth existe
       } catch (err) { console.error("Auth Error:", err); }
     };
     initAuth();
-    const unsubscribe = onAuthStateChanged(auth, setUser);
+    const unsubscribe = onAuthStateChanged(auth!, setUser);
     return () => unsubscribe();
   }, [isMounted]);
 
@@ -166,8 +166,7 @@ export default function BunkerPage() {
     }
     setLoading(true);
     try {
-      // Usamos encodeURIComponent para asegurar que los espacios y caracteres especiales se manejen bien
-      const tableNameEncoded = encodeURIComponent(config.tableName || 'CRM 10k'); // Fallback por seguridad
+      const tableNameEncoded = encodeURIComponent(config.tableName || 'CRM 10k');
       const formula = encodeURIComponent(`{Etapa}='${config.filterStage}'`);
       
       const response = await fetch(`https://api.airtable.com/v0/${config.baseId}/${tableNameEncoded}?filterByFormula=${formula}`, {
@@ -364,7 +363,7 @@ Responde SOLO este JSON: {"documento": "123456", "monto": 30.00}`;
   };
 
   const confirmInCRM = async (recordId: string, bankDoc: string, athleteName: string, amount: number) => {
-    if (!user) return;
+    if (!user || !db) return; // Aseguramos que db existe
     setLoading(true);
     try {
       const historyRef = doc(db, 'artifacts', appId, 'public', 'data', 'verified_receipts', bankDoc);
