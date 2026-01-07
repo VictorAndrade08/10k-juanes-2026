@@ -150,41 +150,73 @@ export default function ReglamentoSection() {
             </div>
           </ArticleCard>
 
-          <ArticleCard id="art-6" title="Artículo 6. Inscripciones">
-            <div className="space-y-3">
-              <p>
-                <strong>Precio de inscripción:</strong> $30,00 USD (todas las
-                categorías).
-              </p>
-              <p>
-                Para las personas de la tercera edad y personas con discapacidad,
-                el precio es de <strong>$20,00 USD</strong>.
-              </p>
-              <p>
-                Las inscripciones se receptarán desde el{" "}
-                <strong>lunes 20 de enero</strong> hasta el{" "}
-                <strong>30 de enero de 2026</strong> o hasta agotar cupos,
-                determinados por la organización. No se admitirán inscripciones
-                el día de la carrera atlética.
-              </p>
-              <p>
-                <strong>Importante:</strong> Indispensable presentar copia a
-                color de cédula de ciudadanía.
-              </p>
-            </div>
-          </ArticleCard>
+<ArticleCard id="art-6" title="Artículo 6. Inscripciones">
+  <div className="space-y-3">
+    <p>
+      <strong>Precio de inscripción:</strong> $30.00 USD (todas las categorías).
+    </p>
 
-          <ArticleCard id="art-7" title="Artículo 7. Puntos de inscripción">
-            <p>
-              Las inscripciones se realizarán de manera digital a través de
-              WhatsApp:{" "}
-              <WhatsAppLink
-                phoneE164="593995102378"
-                label="+593 99 510 2378"
-                message="Hola, quiero inscribirme en la 10K Ruta de los Tres Juanes 2026. ¿Me ayudan con el proceso?"
-              />
-            </p>
-          </ArticleCard>
+    <p>
+      Para las personas de la tercera edad y personas con discapacidad el precio
+      es de <strong>$20.00 USD</strong>.
+    </p>
+
+    <p>
+      Las inscripciones se las receptará a partir del día{" "}
+      <strong>lunes 12 de enero</strong>{" "}
+      <strong>hasta el 30 de enero de 2026 o hasta agotar cupos</strong>{" "}
+      determinados por la organización. No se admitirá inscripciones el día de
+      la Carrera Atlética.
+    </p>
+
+    <p>
+      También podrás inscribirte en la página web oficial:{" "}
+      <a
+        href="https://10krutadelostresjuanes.com.ec/"
+        target="_blank"
+        rel="noreferrer"
+        className="font-extrabold underline underline-offset-4 hover:opacity-80"
+      >
+        https://10krutadelostresjuanes.com.ec/
+      </a>
+    </p>
+
+    <div className="rounded-2xl border border-black/10 bg-black/[0.03] p-5">
+      <p className="font-semibold mb-1">Punto físico (OSCUS Matriz)</p>
+      <p className="text-black/80">
+        Cooperativa OSCUS — Sucre entre Lalama y Bolívar, Ambato.
+      </p>
+    </div>
+
+    <p>
+      <strong>IMPORTANTE:</strong> Indispensable presentar copia a color de
+      Cédula de Ciudadanía.
+    </p>
+  </div>
+</ArticleCard>
+
+
+
+<ArticleCard id="art-7" title="Artículo 7. Puntos de Inscripción">
+  <div className="space-y-3">
+    <p>
+      Las inscripciones se realizarán de manera digital a través de nuestro
+      WhatsApp:{" "}
+      <WhatsAppLink
+        phoneE164="593995102378"
+        label="+593 99 510 2378"
+        message="Hola, quiero inscribirme en la 10K Ruta de los Tres Juanes 2026. ¿Me ayudan con el proceso?"
+      />
+    </p>
+
+    <div className="rounded-2xl border border-black/10 bg-black/[0.03] p-5">
+      <p className="font-semibold mb-1">Punto físico</p>
+      <p className="text-black/80">
+        Cooperativa OSCUS — Sucre entre La Palma y Bolívar, Ambato.
+      </p>
+    </div>
+  </div>
+</ArticleCard>
 
           <ArticleCard id="art-8" title="Artículo 8. Modificaciones">
             <p>
@@ -198,14 +230,14 @@ export default function ReglamentoSection() {
             </p>
           </ArticleCard>
 
-          <ArticleCard id="art-9" title="Artículo 9. Atención médica">
-            <p>
-              Además de contar con la asistencia médica de la Cruz Roja de
-              Tungurahua, los atletas contarán con un seguro de vida y
-              accidentes en horario de 19:00 a 21:00, proporcionado por Sweaden
-              Compañía de Seguros.
-            </p>
-          </ArticleCard>
+<ArticleCard id="art-9" title="Artículo 9. Atención Médica">
+  <p>
+    Además de contar con la asistencia médica de <strong>paramédicos</strong>,
+    los atletas contarán con un <strong>seguro de vida y accidentes</strong> en
+    horario de <strong>19:00 a 21:00</strong>, proporcionado por{" "}
+    <strong>Sweaden Compañía de Seguros</strong>.
+  </p>
+</ArticleCard>
 
           <ArticleCard id="art-10" title="Artículo 10. Clasificaciones">
             <p>
