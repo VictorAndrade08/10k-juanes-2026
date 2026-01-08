@@ -5,15 +5,15 @@ import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, signInAnonymously, Auth, User as FirebaseUser } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, onSnapshot, getDoc, Firestore } from 'firebase/firestore';
 
-// --- IMPORTACIONES COMPLETAS (VERIFICADAS) ---
 import {
   ShieldCheck, RefreshCw, CheckCircle2, CheckCircle, AlertCircle, Search, ArrowRight,
   Scan, FileText, Loader2, Eye, Settings2, AlertTriangle, Lock, History, ShieldAlert,
   Fingerprint, Zap, Info, CreditCard, Share2, XCircle, AlertOctagon, Hash, Calendar,
-  Maximize2, Database, Image as ImageIcon, User, Wallet, FileWarning, Unlock, LogOut
+  Maximize2, Database, Image as ImageIcon, User, Wallet, FileWarning, Unlock, LogOut,
+  Users, Accessibility, LayoutDashboard
 } from 'lucide-react';
 
-// --- CONFIGURACIÓN MAESTRA ---
+// --- CONFIGURACIÓN ---
 const CREDENTIALS = {
   FIREBASE: {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
@@ -27,9 +27,10 @@ const CREDENTIALS = {
 };
 
 const AIRTABLE_CONFIG_KEY = 'verificador_ruta_3_juanes_config';
-const ACCESS_PIN = "1026"; // <--- CAMBIA TU CONTRASEÑA AQUÍ
+const ACCESS_PIN = "1026"; 
+const PRICE_FULL = 30.00;
+const PRICE_DISCOUNT = 20.00;
 
-// Inicialización segura de Firebase
 let app: FirebaseApp | undefined;
 let auth: Auth | undefined;
 let db: Firestore | undefined;
@@ -44,22 +45,20 @@ if (typeof window !== "undefined" && CREDENTIALS.FIREBASE.apiKey) {
   }
 }
 
-// --- TIPOS DE DATOS (TypeScript) ---
 interface Record {
   id: string;
   nombre: string;
   cedula: string;
-  edad: string | number;
+  edad: number;
   categoria: string;
+  tieneDiscapacidad: boolean;
+  esTerceraEdad: boolean;
   valorEsperado: number;
   fotoUrl: string | null;
   docExtraido: string | null;
   montoExtraido: number | null;
   statusIA: 'pendiente' | 'escaneando' | 'listo' | 'error';
 }
-
-// Definimos el tipo de estado explícitamente
-type MatchStatus = 'found' | 'missing' | 'fraud' | 'verified';
 
 interface MatchResult {
   bank: {
@@ -70,19 +69,20 @@ interface MatchResult {
     esInterbancaria: boolean;
   };
   record: Record | null;
-  status: MatchStatus;
+  status: 'found' | 'missing' | 'fraud' | 'verified' | 'reused';
   matchType: 'documento' | 'nombre';
   claimedBy?: string;
   nameMismatch: boolean;
+  isFamily: boolean;
+  isGroupPayment: boolean;
+  paymentStatus: 'correct' | 'underpaid' | 'overpaid';
+  estimatedPeople: number;
 }
 
 export default function BunkerPage() {
-  // --- ESTADOS DE SEGURIDAD ---
   const [isLocked, setIsLocked] = useState(true);
   const [pinInput, setPinInput] = useState("");
   const [pinError, setPinError] = useState(false);
-
-  // --- ESTADOS DE LA APP ---
   const [isMounted, setIsMounted] = useState(false);
   const [user, setUser] = useState<FirebaseUser | null>(null);
   
@@ -106,7 +106,6 @@ export default function BunkerPage() {
 
   const appId = "bunker-anti-fraude-10k";
 
-  // --- EFECTOS ---
   useEffect(() => {
     setIsMounted(true);
     const saved = localStorage.getItem(AIRTABLE_CONFIG_KEY);
@@ -132,7 +131,6 @@ export default function BunkerPage() {
     });
   }, [user]);
 
-  // --- SEGURIDAD PIN ---
   const handleUnlock = (e: React.FormEvent) => {
     e.preventDefault();
     if (pinInput === ACCESS_PIN) {
@@ -145,12 +143,8 @@ export default function BunkerPage() {
     }
   };
 
-  const handleLock = () => {
-    setIsLocked(true);
-    setPinInput("");
-  };
+  const handleLock = () => { setIsLocked(true); setPinInput(""); };
 
-  // --- FUNCIONES AUXILIARES ---
   const showStatus = (type: 'success' | 'error', message: string) => {
     setStatus({ type, message });
     setTimeout(() => setStatus({ type: '', message: '' }), 5000);
@@ -176,7 +170,6 @@ export default function BunkerPage() {
     } catch (e) { return null; }
   };
 
-  // --- LÓGICA DE NEGOCIO ---
   const fetchAirtableRecords = async () => {
     if (!config.apiKey) return setIsConfigOpen(true);
     setLoading(true);
@@ -185,18 +178,27 @@ export default function BunkerPage() {
       const response = await fetch(url, { headers: { Authorization: `Bearer ${config.apiKey}` } });
       const data = await response.json();
       if (data.records) {
-        setAirtableRecords(data.records.map((r: any) => ({
-          id: r.id,
-          nombre: r.fields['nombre'] || 'DESCONOCIDO',
-          cedula: r.fields['cedula'] || 'S/N',
-          edad: r.fields['edad'] || 'N/A',
-          categoria: r.fields['categorias'] || 'N/A',
-          valorEsperado: r.fields['Valor'] || 0,
-          fotoUrl: r.fields['Comprobante']?.[0]?.url || null,
-          docExtraido: null,
-          montoExtraido: null,
-          statusIA: 'pendiente'
-        })));
+        setAirtableRecords(data.records.map((r: any) => {
+          const edad = r.fields['edad'] || 0;
+          const discapacidad = r.fields['Discapacidad'] === true; 
+          const terceraEdad = edad >= 65;
+          const precio = (discapacidad || terceraEdad) ? PRICE_DISCOUNT : PRICE_FULL;
+
+          return {
+            id: r.id,
+            nombre: r.fields['nombre'] || 'DESCONOCIDO',
+            cedula: r.fields['cedula'] || 'S/N',
+            edad,
+            categoria: r.fields['categorias'] || 'N/A',
+            tieneDiscapacidad: discapacidad,
+            esTerceraEdad: terceraEdad,
+            valorEsperado: precio,
+            fotoUrl: r.fields['Comprobante']?.[0]?.url || null,
+            docExtraido: null,
+            montoExtraido: null,
+            statusIA: 'pendiente'
+          };
+        }));
         showStatus('success', `${data.records.length} atletas cargados.`);
       }
     } catch (e) { showStatus('error', 'Error Airtable.'); } finally { setLoading(false); }
@@ -211,21 +213,15 @@ export default function BunkerPage() {
       const imageData: any = await urlToBase64(record.fotoUrl);
       if (!imageData) throw new Error("CORS Block");
 
-      // --- MODELO 2.5 PREVIEW (COMO SOLICITASTE) ---
+      const prompt = `Analiza este comprobante. Extrae NÚMERO DOCUMENTO y MONTO. JSON: {"documento": "123456", "monto": 30.00}`;
+      
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${CREDENTIALS.GEMINI_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{
-            parts: [
-              { text: "Analiza este comprobante de transferencia bancaria de Ecuador. Extrae el NÚMERO DE DOCUMENTO (comprobante, referencia o secuencial) y el MONTO. Responde SOLO este JSON: {\"documento\": \"12345678\", \"monto\": 20.00}" },
-              { inlineData: { mimeType: imageData.mimeType, data: imageData.data } }
-            ]
-          }]
+          contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: imageData.mimeType, data: imageData.data } }] }]
         })
       });
-
-      if (!response.ok) throw new Error(`Gemini 404/Error: ${response.status}`);
 
       const result = await response.json();
       const text = result.candidates?.[0]?.content?.parts?.[0]?.text.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -234,7 +230,6 @@ export default function BunkerPage() {
 
       setAirtableRecords(prev => prev.map(r => r.id === record.id ? { ...r, docExtraido: docId, montoExtraido: json.monto, statusIA: docId ? 'listo' : 'error' } : r));
     } catch (e) {
-      console.error(e);
       setAirtableRecords(prev => prev.map(r => r.id === record.id ? { ...r, statusIA: 'error' } : r));
     } finally { setScanningId(null); }
   };
@@ -278,8 +273,7 @@ export default function BunkerPage() {
 
     const assignedIds = new Set();
     
-    // --- CORRECCIÓN DE TIPADO TYPESCRIPT AQUÍ ---
-    const newMatches: MatchResult[] = bankEntries.map(bank => {
+    const newMatches = bankEntries.map(bank => {
       let record = airtableRecords.find(r => r.docExtraido === bank.documento);
       let matchType: 'documento' | 'nombre' = 'documento';
 
@@ -295,45 +289,72 @@ export default function BunkerPage() {
       if (record) assignedIds.add(record.id);
       const historical = historicalDocs[bank.documento];
 
+      // --- LÓGICA DE VALIDACIÓN DE NOMBRES ---
       let nameMismatch = false;
+      let isFamily = false;
       if (record && !matchType.includes('nombre')) {
          const crmName = record.nombre.toUpperCase();
          const bankName = bank.depositor.toUpperCase();
-         if (bankName.length > 5 && !crmName.includes(bankName) && !bankName.includes(crmName)) {
-            nameMismatch = true;
+         
+         if (!crmName.includes(bankName) && !bankName.includes(crmName)) {
+            const crmParts = crmName.split(' ').filter(p => p.length > 3);
+            const hasCommonName = crmParts.some(part => bankName.includes(part));
+            if (hasCommonName) isFamily = true; 
+            nameMismatch = true; 
          }
       }
 
-      // Definimos el estado explícitamente para evitar el error de tipado
-      let status: MatchStatus = 'missing';
-      if (historical) status = 'fraud';
-      else if (record) status = 'found';
+      // --- LÓGICA DE PRECIOS Y GRUPOS ---
+      let paymentStatus: 'correct' | 'underpaid' | 'overpaid' = 'correct';
+      let isGroupPayment = false;
+      let estimatedPeople = 1;
+
+      if (record) {
+        if (bank.monto < record.valorEsperado) paymentStatus = 'underpaid'; // Pagó menos
+        else if (bank.monto > record.valorEsperado + 5) { // Tolerancia $5
+            paymentStatus = 'overpaid'; 
+            isGroupPayment = true; 
+            estimatedPeople = Math.round(bank.monto / record.valorEsperado);
+        }
+      } else {
+        // Si no hay record, inferimos grupo si es >= 40 (2 seniors)
+        if (bank.monto >= 40) {
+            isGroupPayment = true;
+            estimatedPeople = Math.round(bank.monto / PRICE_DISCOUNT); // Estimación conservadora
+        }
+      }
+
+      // --- ESTADO FINAL ---
+      let status: 'found' | 'missing' | 'fraud' | 'verified' | 'reused' = 'missing';
+      
+      if (historical) {
+        if (isGroupPayment) status = 'reused'; 
+        else status = 'fraud';
+      } else if (record) {
+        status = 'found';
+      }
 
       return {
-        bank,
-        record: record || null,
-        status, // Ahora TS sabe que esto es seguro
-        matchType,
-        claimedBy: historical?.atleta,
-        nameMismatch
+        bank, record: record || null, status, matchType, claimedBy: historical?.atleta,
+        nameMismatch, isFamily, isGroupPayment, paymentStatus, estimatedPeople
       };
     });
 
     setMatches(newMatches);
     if (newMatches.length > 0) showStatus('success', 'Conciliación ejecutada.');
-    else showStatus('error', 'No se encontraron datos válidos.');
+    else showStatus('error', 'No se encontraron datos.');
   };
 
-  const confirmInCRM = async (match: MatchResult) => {
+  const confirmInCRM = async (match: any) => {
     if (!user || !match.record) return;
     setLoading(true);
     try {
       const { id, nombre } = match.record;
       const { documento, monto } = match.bank;
-
       const docRef = doc(db!, 'artifacts', appId, 'public', 'data', 'verified_receipts', documento);
+      
       const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
+      if (docSnap.exists() && !match.isGroupPayment) {
         showStatus('error', 'FRAUDE: Documento ya usado.');
         setLoading(false);
         return;
@@ -346,44 +367,34 @@ export default function BunkerPage() {
           fields: {
             'Etapa': 'Notificar', 
             'Numero Comprobante': documento,
-            'Comentarios': `✅ VALIDADO: Doc ${documento} | $${monto} | IA`
+            'Comentarios': `✅ VALIDADO (${match.isGroupPayment ? 'GRUPO' : 'INDIV'}): Doc ${documento} | $${monto}`
           }
         })
       });
 
-      await setDoc(docRef, { atleta: nombre, fecha: new Date().toISOString(), monto, uid: user.uid });
+      const firestoreId = match.isGroupPayment ? `${documento}_${id}` : documento;
+      await setDoc(doc(db!, 'artifacts', appId, 'public', 'data', 'verified_receipts', firestoreId), { 
+        atleta: nombre, fecha: new Date().toISOString(), monto, uid: user.uid, isGroup: match.isGroupPayment
+      });
       
-      // Actualización segura del estado
-      setMatches(prev => prev.map(m => 
-        m.bank.documento === documento ? { ...m, status: 'verified' as MatchStatus } : m
-      ));
-      
+      setMatches(prev => prev.map(m => m.record?.id === id ? { ...m, status: 'verified' as const } : m));
       showStatus('success', 'Blindado exitosamente.');
     } catch (e) { showStatus('error', 'Error al guardar.'); } finally { setLoading(false); }
   };
 
   if (!isMounted) return null;
 
-  // --- VISTA DE BLOQUEO DE SEGURIDAD ---
   if (isLocked) {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
         <div className="bg-zinc-900 border-2 border-zinc-800 p-10 rounded-[2.5rem] shadow-2xl w-full max-w-sm text-center relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-500"></div>
-          <div className="mb-8 flex justify-center">
-            <div className="bg-zinc-800 p-5 rounded-2xl shadow-lg shadow-sky-500/10 border border-zinc-700">
-              <Lock size={40} className="text-sky-500" strokeWidth={2}/>
-            </div>
-          </div>
+          <div className="mb-8 flex justify-center"><div className="bg-zinc-800 p-5 rounded-2xl shadow-lg shadow-sky-500/10 border border-zinc-700"><Lock size={40} className="text-sky-500" strokeWidth={2}/></div></div>
           <h1 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">Búnker 10k</h1>
           <p className="text-zinc-500 text-[10px] font-bold tracking-[0.4em] uppercase mb-8">Acceso Restringido</p>
           <form onSubmit={handleUnlock} className="space-y-6">
-            <div className="relative">
-              <input type="password" maxLength={4} className={`w-full p-4 bg-zinc-950 border-2 rounded-xl text-center text-3xl text-white font-mono tracking-[1em] focus:outline-none transition-all ${pinError ? 'border-rose-500 animate-pulse' : 'border-zinc-800 focus:border-sky-500'}`} placeholder="••••" value={pinInput} onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))} autoFocus />
-            </div>
-            <button type="submit" className="w-full py-4 bg-sky-600 hover:bg-sky-500 text-white font-black rounded-xl uppercase tracking-widest text-xs transition-all active:scale-95 shadow-lg flex items-center justify-center gap-2">
-              <Unlock size={14}/> Desbloquear Terminal
-            </button>
+            <input type="password" maxLength={4} className={`w-full p-4 bg-zinc-950 border-2 rounded-xl text-center text-3xl text-white font-mono tracking-[1em] focus:outline-none transition-all ${pinError ? 'border-rose-500 animate-pulse' : 'border-zinc-800 focus:border-sky-500'}`} placeholder="••••" value={pinInput} onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))} autoFocus />
+            <button type="submit" className="w-full py-4 bg-sky-600 hover:bg-sky-500 text-white font-black rounded-xl uppercase tracking-widest text-xs transition-all active:scale-95 shadow-lg flex items-center justify-center gap-2"><Unlock size={14}/> Desbloquear Terminal</button>
           </form>
           {pinError && <p className="mt-4 text-rose-500 text-[10px] font-black uppercase tracking-widest animate-bounce">Código Incorrecto</p>}
         </div>
@@ -391,146 +402,156 @@ export default function BunkerPage() {
     );
   }
 
-  // --- VISTA DEL DASHBOARD ---
   return (
-    <div className="min-h-screen bg-zinc-950 p-4 md:p-6 font-sans text-zinc-200">
-      <div className="max-w-[1920px] mx-auto space-y-6">
+    <div className="min-h-screen bg-zinc-950 p-3 font-sans text-zinc-200 flex flex-col gap-4 overflow-hidden">
+      
+      {/* GRID PRINCIPAL SIN HEADER */}
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 h-full">
         
-        {/* HEADER */}
-        <header className="bg-zinc-900/80 p-4 md:p-6 rounded-3xl border border-zinc-800 flex flex-col md:flex-row justify-between items-center gap-4 shadow-xl backdrop-blur-sm">
-          <div className="flex items-center gap-4">
-            <div className="bg-sky-500/20 p-3 rounded-2xl text-sky-400 shadow-[0_0_20px_rgba(14,165,233,0.15)] border border-sky-500/30">
-              <ShieldCheck size={32} strokeWidth={2}/>
-            </div>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tighter text-white">Búnker 10k <span className="text-sky-400">Pro</span></h1>
-              <p className="text-zinc-400 text-xs font-bold tracking-[0.2em] uppercase">Centro de Verificación de Pagos</p>
-            </div>
-          </div>
-          <div className="flex gap-3 w-full md:w-auto items-center">
-            <button onClick={fetchAirtableRecords} disabled={loading} className="flex-1 md:flex-none px-6 py-3 bg-sky-500 hover:bg-sky-400 text-white rounded-xl text-sm font-bold flex justify-center items-center gap-2 transition-all active:scale-95 disabled:opacity-50 shadow-lg shadow-sky-500/20">
-              <RefreshCw size={18} className={loading ? "animate-spin" : ""} /> <span>Sincronizar CRM</span>
-            </button>
-            <button onClick={() => setIsConfigOpen(true)} className="p-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl border border-zinc-700 text-zinc-400 hover:text-white transition-all">
-              <Settings2 size={20}/>
-            </button>
-            <button onClick={handleLock} className="p-3 bg-rose-900/20 hover:bg-rose-900/40 rounded-xl border border-rose-900/30 text-rose-500 transition-all ml-2" title="Bloquear Pantalla">
-              <LogOut size={20}/>
-            </button>
-          </div>
-        </header>
-
-        {/* LAYOUT PRINCIPAL */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          
-          {/* SCANNER */}
-          <div className="lg:col-span-3 flex flex-col gap-4 h-[500px] lg:h-[calc(100vh-180px)] min-h-[500px]">
-            <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-3xl flex-1 flex flex-col overflow-hidden relative shadow-2xl">
-              <div className="flex justify-between items-center mb-4 pb-4 border-b border-zinc-800">
-                <h2 className="text-sm font-black uppercase text-zinc-500 tracking-widest flex gap-2 items-center">
-                  <Fingerprint size={16} className="text-sky-500"/> OCR ({airtableRecords.length})
-                </h2>
-                <button onClick={scanAll} disabled={isScanningAll || airtableRecords.length === 0} className="text-[10px] font-bold bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1.5 rounded-lg flex gap-2 items-center transition-all disabled:opacity-30">
-                  {isScanningAll ? <Loader2 className="animate-spin" size={12}/> : <Scan size={12}/>} {isScanningAll ? "..." : "LEER"}
+        {/* COLUMNA IZQUIERDA: SCANNER (Compacta - 3 cols) */}
+        <div className="lg:col-span-3 flex flex-col gap-3 h-full overflow-hidden">
+          <div className="bg-zinc-900 border border-zinc-800 p-3 rounded-2xl flex-1 flex flex-col overflow-hidden relative shadow-2xl">
+             <div className="flex justify-between items-center mb-3 pb-3 border-b border-zinc-800">
+                <span className="text-[10px] font-black uppercase text-zinc-400 flex gap-2 items-center tracking-widest">
+                  <Fingerprint size={14} className="text-sky-500"/> BÚNKER 10K <span className="text-zinc-600">|</span> OCR ({airtableRecords.length})
+                </span>
+                <button onClick={scanAll} disabled={isScanningAll || airtableRecords.length === 0} className="text-[9px] font-bold bg-sky-600/20 text-sky-400 px-3 py-1 rounded hover:bg-sky-600/40 disabled:opacity-30 flex items-center gap-1">
+                  {isScanningAll ? <Loader2 className="animate-spin" size={10}/> : <Scan size={10}/>} {isScanningAll ? "..." : "LEER TODO"}
                 </button>
-              </div>
-              <div className="flex-1 overflow-y-auto pr-2 space-y-3 custom-scrollbar">
+             </div>
+             <div className="flex-1 overflow-y-auto pr-1 space-y-2 custom-scrollbar">
+                {airtableRecords.length === 0 && <div className="h-full flex items-center justify-center text-zinc-700 opacity-50 flex-col gap-2"><Database size={32}/><span className="text-[10px] font-bold">Sin Datos</span></div>}
                 {airtableRecords.map(r => (
-                  <div key={r.id} className={`p-3 rounded-xl border transition-all group ${r.statusIA === 'listo' ? 'bg-sky-950/30 border-sky-500/30' : r.statusIA === 'error' ? 'bg-rose-950/20 border-rose-500/30' : 'bg-zinc-800/30 border-zinc-800 hover:border-zinc-700'}`}>
-                    <div className="flex justify-between items-start gap-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-bold text-white truncate group-hover:text-sky-300 transition-colors">{r.nombre}</p>
-                        <div className="flex flex-wrap items-center gap-1 mt-1"><span className="text-[9px] text-zinc-500 font-mono">{r.cedula}</span></div>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                         {r.fotoUrl && <button onClick={() => setSelectedImage(r.fotoUrl)} className="p-1.5 bg-zinc-800/50 rounded-md hover:bg-sky-500/20 text-zinc-400 hover:text-sky-300 transition-all"><Eye size={14}/></button>}
-                         <button onClick={() => scanReceiptIA(r)} disabled={scanningId === r.id} className="p-1.5 bg-zinc-800/50 rounded-md hover:bg-sky-500/20 text-zinc-400 hover:text-sky-300 transition-all disabled:opacity-50">{scanningId === r.id ? <Loader2 size={14} className="animate-spin text-sky-400"/> : <Scan size={14}/>}</button>
+                  <div key={r.id} className={`p-2.5 rounded-lg border transition-all ${r.statusIA === 'listo' ? 'bg-sky-950/30 border-sky-500/30' : r.statusIA === 'error' ? 'bg-rose-950/20 border-rose-500/30' : 'bg-zinc-800/30 border-zinc-800'}`}>
+                    <div className="flex justify-between items-start">
+                      <div className="min-w-0 w-full">
+                        <div className="flex justify-between w-full">
+                           <p className="text-[11px] font-bold text-white truncate max-w-[120px]">{r.nombre}</p>
+                           <div className="flex items-center gap-1">
+                             {r.fotoUrl && <button onClick={() => setSelectedImage(r.fotoUrl)} className="text-zinc-400 hover:text-white"><Eye size={12}/></button>}
+                             <button onClick={() => scanReceiptIA(r)} disabled={scanningId === r.id} className="text-sky-500 hover:text-white">{scanningId === r.id ? <Loader2 size={12} className="animate-spin"/> : <Scan size={12}/>}</button>
+                           </div>
+                        </div>
+                        <div className="flex gap-2 mt-1 items-center">
+                            <span className="text-[9px] text-zinc-500 font-mono">{r.cedula}</span>
+                             {(r.esTerceraEdad || r.tieneDiscapacidad) && <span className="text-[8px] bg-blue-600 text-white px-1 rounded flex items-center gap-0.5"><Accessibility size={8}/> DESC</span>}
+                        </div>
                       </div>
                     </div>
-                    {r.docExtraido && <div className="mt-2 pt-2 border-t border-zinc-800/50 flex items-center justify-between text-[10px] font-mono"><div className="flex items-center gap-1 text-sky-400 font-bold truncate"><Hash size={10}/> {r.docExtraido}</div><div className="text-emerald-400 font-bold">${r.montoExtraido?.toFixed(2)}</div></div>}
+                    {r.docExtraido && <div className="mt-1 pt-1 border-t border-zinc-800/50 flex justify-between text-[9px] font-mono"><span className="text-sky-400">{r.docExtraido}</span><span className="text-emerald-400">${r.montoExtraido}</span></div>}
                   </div>
                 ))}
-              </div>
-            </div>
+             </div>
+          </div>
+        </div>
+
+        {/* COLUMNA DERECHA: MATCHER (Expandida - 9 cols) */}
+        <div className="flex-1 flex flex-col gap-3 h-full overflow-hidden lg:col-span-9">
+          
+          {/* BARRA DE HERRAMIENTAS INTEGRADA */}
+          <div className="bg-zinc-900 border border-zinc-800 p-3 rounded-2xl shrink-0 flex gap-3 shadow-lg items-center">
+             <div className="flex-1 relative">
+                <textarea className="w-full h-12 p-2 pl-3 bg-zinc-950/50 border border-zinc-800 rounded-xl text-xs font-mono text-zinc-300 resize-none focus:border-sky-500 outline-none leading-tight pt-3" placeholder="Pegar movimientos del banco aquí..." value={bankData} onChange={(e) => setBankData(e.target.value)}/>
+             </div>
+             
+             {/* BOTONES DE ACCIÓN */}
+             <div className="flex gap-2 h-12">
+               <button onClick={processMatches} className="px-4 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-[10px] font-black uppercase flex flex-col justify-center items-center leading-none gap-1 w-20 shadow-lg active:scale-95 transition-all">
+                  <ArrowRight size={16}/> VERIFICAR
+               </button>
+               
+               <div className="w-[1px] bg-zinc-800 h-full mx-1"></div>
+
+               <button onClick={fetchAirtableRecords} disabled={loading} className="px-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-xl text-[10px] font-bold flex flex-col justify-center items-center gap-1 w-16 transition-all">
+                  <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> RECARGAR
+               </button>
+               <button onClick={() => setIsConfigOpen(true)} className="px-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-xl flex justify-center items-center w-12 transition-all">
+                  <Settings2 size={16}/>
+               </button>
+               <button onClick={handleLock} className="px-3 bg-rose-950/30 hover:bg-rose-900/50 text-rose-500 rounded-xl flex justify-center items-center w-12 transition-all">
+                  <LogOut size={16}/>
+               </button>
+             </div>
           </div>
 
-          {/* MATCHER */}
-          <div className="lg:col-span-9 flex flex-col gap-6 h-auto lg:h-[calc(100vh-180px)]">
-            <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-3xl shadow-xl flex flex-col md:flex-row gap-4 shrink-0">
-              <div className="flex-1"><div className="relative"><textarea className="w-full h-24 p-4 bg-zinc-950/50 border-2 border-zinc-800 rounded-2xl text-sm font-mono text-zinc-300 resize-none focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all placeholder:text-zinc-600" placeholder="Pega aquí el texto del banco..." value={bankData} onChange={(e) => setBankData(e.target.value)}/><div className="absolute bottom-4 right-4 text-zinc-600 pointer-events-none"><Wallet size={16}/></div></div></div>
-              <button onClick={processMatches} className="w-full md:w-40 bg-gradient-to-br from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white rounded-2xl border-0 flex flex-col items-center justify-center gap-1 transition-all active:scale-95 group shadow-lg shadow-sky-500/25 py-4 md:py-0"><ArrowRight size={24} className="group-hover:translate-x-1 transition-transform"/><span className="text-[10px] font-black uppercase text-center leading-tight tracking-wider">EJECUTAR<br/>CRUCE</span></button>
-            </div>
-
-            <div className="bg-zinc-900/80 border border-zinc-800 p-4 md:p-6 rounded-3xl flex-1 overflow-y-auto custom-scrollbar relative shadow-inner backdrop-blur-md">
-              <h2 className="text-sm font-black uppercase text-zinc-500 mb-6 sticky top-0 bg-zinc-900/95 py-3 z-10 flex gap-2 items-center border-b border-zinc-800"><Search size={18} className="text-sky-500"/> Resultados</h2>
-              <div className="grid gap-6 pb-6">
-                {matches.length === 0 && <div className="text-center py-20 text-zinc-600 flex flex-col items-center gap-4 opacity-50"><div className="p-6 bg-zinc-800/50 rounded-full"><Search size={40} strokeWidth={1.5}/></div><p className="text-sm uppercase font-bold tracking-widest">Esperando datos...</p></div>}
-                
+          <div className="bg-zinc-900/80 border border-zinc-800 p-4 rounded-2xl flex-1 overflow-y-auto custom-scrollbar relative shadow-inner">
+             <div className="grid gap-3 pb-4">
+                {matches.length === 0 && <div className="text-center py-32 text-zinc-700 flex flex-col items-center gap-4 opacity-50"><LayoutDashboard size={64} strokeWidth={1}/></div>}
                 {matches.map((m, i) => (
-                  <div key={i} className={`rounded-2xl border-2 transition-all relative overflow-hidden shadow-md ${m.status === 'verified' ? 'bg-emerald-950/10 border-emerald-500/30 opacity-70 grayscale-[50%]' : m.status === 'fraud' || m.bank.esDuplicadoBanco ? 'bg-rose-950/20 border-rose-500/50' : m.status === 'found' ? 'bg-zinc-800/50 border-emerald-500/40 shadow-emerald-500/5' : 'bg-zinc-900 border-zinc-800'}`}>
+                  <div key={i} className={`rounded-xl border-2 transition-all relative overflow-hidden shadow-lg ${m.status === 'verified' ? 'bg-emerald-950/10 border-emerald-500/30 opacity-60' : m.status === 'fraud' ? 'bg-rose-950/20 border-rose-500/50' : 'bg-zinc-900 border-zinc-800'}`}>
+                    {/* ALERTA STRIPS */}
                     <div className="flex flex-col">
-                      {m.status === 'fraud' && <div className="w-full bg-rose-500 text-white p-2 flex items-center justify-center gap-2 animate-pulse font-black uppercase text-xs tracking-widest"><AlertOctagon size={16}/> ¡POSIBLE ESTAFA! Documento ya usado por: {m.claimedBy}</div>}
-                      {m.bank.esDuplicadoBanco && !m.status.includes('fraud') && <div className="w-full bg-rose-500/80 text-white p-1.5 flex items-center justify-center gap-2 font-bold uppercase text-[10px] tracking-widest"><AlertTriangle size={14}/> Duplicado en esta lista</div>}
-                      {m.record && m.nameMismatch && m.status !== 'fraud' && <div className="w-full bg-amber-500 text-zinc-900 p-1.5 flex items-center justify-center gap-2 font-black uppercase text-[10px] tracking-widest"><AlertTriangle size={14}/> Nombre no coincide (Posible Pago de Tercero)</div>}
-                      {m.bank.esInterbancaria && <div className="w-full bg-blue-600 text-white p-1 flex items-center justify-center gap-2 font-bold uppercase text-[9px] tracking-widest"><Info size={12}/> Interbancaria</div>}
+                        {m.status === 'fraud' && <div className="w-full bg-rose-500 text-white p-1 flex justify-center gap-2 font-black text-[10px] tracking-widest"><AlertOctagon size={12}/> ¡ESTAFA! USADO POR: {m.claimedBy}</div>}
+                        
+                        {(m.isGroupPayment || m.status === 'reused') && (
+                             <div className="w-full bg-violet-600 text-white p-1 flex justify-center gap-2 font-black text-[10px] tracking-widest shadow-lg">
+                                <Users size={12}/> GRUPO DETECTADO (~{m.estimatedPeople} CUPOS) {m.status === 'reused' ? '- DOC REUTILIZADO (OK)' : ''}
+                             </div>
+                        )}
+
+                        {m.paymentStatus === 'underpaid' && <div className="w-full bg-rose-600 text-white p-1 flex justify-center gap-2 font-black text-[10px] tracking-widest"><AlertTriangle size={12}/> PAGO INCOMPLETO (FALTAN ${(m.record?.valorEsperado || 30) - m.bank.monto})</div>}
+                        
+                        {m.bank.esDuplicadoBanco && !m.status.includes('fraud') && !m.isGroupPayment && <div className="w-full bg-rose-500/80 text-white p-1 flex justify-center gap-2 font-bold uppercase text-[10px] tracking-widest"><AlertTriangle size={12}/> Duplicado en lista</div>}
+                        
+                        {m.record && m.nameMismatch && m.status !== 'fraud' && (
+                            <div className={`w-full p-1 flex justify-center gap-2 font-black text-[10px] tracking-widest ${m.isFamily ? 'bg-blue-600 text-white' : 'bg-amber-500 text-zinc-900'}`}>
+                                {m.isFamily ? <Users size={12}/> : <AlertTriangle size={12}/>} 
+                                {m.isFamily ? 'FAMILIAR DETECTADO (APELLIDO OK)' : 'NOMBRE NO COINCIDE (TERCERO)'}
+                            </div>
+                        )}
+                        
+                        {m.bank.esInterbancaria && <div className="w-full bg-sky-600/50 text-white p-0.5 flex justify-center gap-2 font-bold uppercase text-[9px] tracking-widest"><Info size={10}/> Interbancaria</div>}
                     </div>
 
-                    <div className="p-4 md:p-5 flex flex-col md:flex-row gap-6 items-stretch">
-                      <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="bg-zinc-950/50 p-4 rounded-xl border border-zinc-800 flex flex-col justify-center relative overflow-hidden">
-                           <div className="absolute top-0 right-0 p-2 opacity-5"><CreditCard size={64}/></div>
-                          <div className="flex items-center gap-2 mb-2"><span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest bg-zinc-900 px-2 py-1 rounded">BANCO</span></div>
-                          <div className="text-3xl font-black text-white tracking-tighter tabular-nums">{m.bank.documento}</div>
-                          <div className="text-2xl font-bold text-emerald-400 tabular-nums mt-0.5">${m.bank.monto.toFixed(2)}</div>
-                          <div className="text-[10px] font-mono text-zinc-400 mt-2 uppercase truncate border-t border-zinc-800 pt-2" title={m.bank.depositor}>{m.bank.depositor || 'NO DISPONIBLE'}</div>
-                        </div>
+                    <div className="p-3 flex flex-col md:flex-row gap-4 items-stretch">
+                       {/* BANCO */}
+                       <div className="flex-1 bg-zinc-950/50 p-3 rounded-lg border border-zinc-700 flex flex-col justify-center">
+                          <div className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest mb-1 flex justify-between">
+                             <span>BANCO</span>
+                             <span className="font-mono text-zinc-600">{m.bank.documento}</span>
+                          </div>
+                          <div className="flex justify-between items-end">
+                             <div className="text-[10px] font-mono text-zinc-400 uppercase truncate w-32" title={m.bank.depositor}>{m.bank.depositor || 'DESCONOCIDO'}</div>
+                             <div className={`text-xl font-bold tabular-nums ${m.isGroupPayment ? 'text-violet-400' : (m.paymentStatus === 'underpaid' ? 'text-rose-400' : 'text-emerald-400')}`}>${m.bank.monto.toFixed(2)}</div>
+                          </div>
+                       </div>
 
-                        <div className={`p-4 rounded-xl border flex flex-col relative overflow-hidden ${m.record ? 'bg-sky-950/10 border-sky-500/20' : 'bg-rose-950/10 border-rose-500/20'}`}>
-                           <div className="absolute top-0 right-0 p-2 opacity-5"><ImageIcon size={64}/></div>
+                       {/* CRM */}
+                       <div className={`flex-1 p-3 rounded-lg border flex flex-col justify-center ${m.record ? 'bg-sky-950/10 border-sky-500/20' : 'bg-rose-950/10 border-rose-500/20'}`}>
                           {m.record ? (
                             <>
-                              <div className="flex items-center justify-between gap-2 mb-2">
-                                <span className="text-[10px] font-bold text-sky-500 uppercase tracking-widest bg-sky-950/30 px-2 py-1 rounded border border-sky-500/20">FOTO IA</span>
-                                {m.record.fotoUrl && <button onClick={() => setSelectedImage(m.record!.fotoUrl)} className="text-[9px] bg-zinc-800 px-3 py-1 rounded-full text-zinc-300 hover:text-white border border-zinc-700 hover:border-zinc-500 transition-all uppercase font-bold flex items-center gap-1 z-10"><Eye size={10}/> Ver</button>}
-                              </div>
-                              <div className="text-2xl font-black text-white tracking-tight tabular-nums truncate">{m.record.docExtraido || '---'}</div>
-                               <div className="text-lg font-bold text-sky-400 tabular-nums mb-auto">{m.record.montoExtraido ? `$${m.record.montoExtraido.toFixed(2)}` : '---'}</div>
-                              <div className="mt-3 pt-3 border-t border-sky-500/20 relative z-10">
-                                <div className="text-[9px] text-sky-300/60 uppercase font-black tracking-widest mb-0.5">ATLETA</div>
-                                <div className="text-sm font-black text-white uppercase truncate leading-tight w-full">{m.record.nombre}</div>
-                                <div className="flex flex-wrap gap-2 mt-2 text-[9px] text-zinc-400 font-medium">
-                                  <span className="bg-zinc-800 px-2 py-1 rounded border border-zinc-700">{m.record.cedula}</span>
-                                  <span className="bg-zinc-800 px-2 py-1 rounded border border-zinc-700">{m.record.edad} Años</span>
-                                  <span className="bg-zinc-800 px-2 py-1 rounded border border-zinc-700">{m.record.categoria}</span>
-                                </div>
-                              </div>
+                               <div className="flex justify-between mb-1 items-center">
+                                  <span className="text-[9px] font-bold text-sky-500 uppercase tracking-widest">FOTO / CRM</span>
+                                  {m.record.fotoUrl && <button onClick={() => setSelectedImage(m.record!.fotoUrl)} className="text-[8px] bg-zinc-800 px-2 py-0.5 rounded text-zinc-300 hover:text-white border border-zinc-700">VER</button>}
+                               </div>
+                               <div className="flex justify-between items-end">
+                                  <div className="min-w-0">
+                                     <div className="text-[11px] font-black text-white uppercase truncate w-32">{m.record.nombre}</div>
+                                     <div className="text-[9px] text-zinc-500 font-mono">{m.record.cedula}</div>
+                                  </div>
+                                  <div className="text-right">
+                                     <div className="text-[10px] font-mono text-sky-400">{m.record.docExtraido || '---'}</div>
+                                  </div>
+                               </div>
                             </>
-                          ) : (
-                            <div className="h-full flex flex-col items-center justify-center text-rose-400/60 gap-3"><FileWarning size={32} strokeWidth={1.5}/><span className="text-[10px] font-black uppercase text-center tracking-widest">Sin Coincidencia</span></div>
-                          )}
-                        </div>
-                      </div>
+                          ) : <div className="text-center text-rose-400/50 flex items-center justify-center gap-2"><FileWarning size={16}/><span className="text-[10px] font-bold">SIN DATOS</span></div>}
+                       </div>
 
-                      <div className="w-full md:w-48 shrink-0 flex flex-col justify-center">
-                        {m.status === 'verified' ? (
-                          <div className="h-full w-full bg-emerald-900/20 rounded-xl border border-emerald-500/30 flex flex-col items-center justify-center gap-2 p-4">
-                            <CheckCircle2 size={40} className="text-emerald-500"/>
-                            <span className="text-xs font-black uppercase text-emerald-400 tracking-[0.2em]">BLINDADO</span>
-                          </div>
-                        ) : m.record && m.status !== 'fraud' && !m.bank.esDuplicadoBanco ? (
-                          <button onClick={() => confirmInCRM(m)} className={`h-full w-full rounded-xl text-xs font-black uppercase shadow-lg active:scale-95 transition-all flex flex-col items-center justify-center gap-2 p-4 ${m.nameMismatch ? 'bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white shadow-amber-500/30' : 'bg-gradient-to-br from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white shadow-emerald-500/30'}`}>
-                            <ShieldCheck size={28}/>
-                            <span className="text-center leading-tight tracking-wider">{m.nameMismatch ? 'APROBAR\nTERCERO' : 'BLINDAR\nY APROBAR'}</span>
-                          </button>
-                        ) : (
-                          <div className="h-full w-full bg-zinc-800/50 rounded-xl text-[10px] font-bold text-zinc-500 uppercase flex items-center justify-center text-center border border-zinc-800 p-4 tracking-wider">Requiere<br/>Revisión Manual</div>
-                        )}
-                      </div>
+                       {/* ACCION */}
+                       <div className="w-full md:w-32 shrink-0 flex flex-col justify-center">
+                          {m.status === 'verified' ? (
+                             <div className="text-center text-emerald-500"><CheckCircle2 size={24} className="mx-auto"/><span className="text-[9px] font-black tracking-widest">LISTO</span></div>
+                          ) : m.record && (m.status !== 'fraud' || m.isGroupPayment) && !m.bank.esDuplicadoBanco && m.paymentStatus !== 'underpaid' ? (
+                             <button onClick={() => confirmInCRM(m)} className={`h-full w-full rounded-lg text-[9px] font-black uppercase shadow-lg active:scale-95 transition-all flex flex-col items-center justify-center gap-1 p-2 ${m.isGroupPayment ? 'bg-violet-600 hover:bg-violet-500 text-white' : m.nameMismatch ? 'bg-amber-500 hover:bg-amber-400 text-zinc-900' : 'bg-emerald-500 hover:bg-emerald-400 text-zinc-900'}`}>
+                                <ShieldCheck size={18}/>
+                                <span className="text-center leading-tight">{m.isGroupPayment ? 'APROBAR\nGRUPO' : m.nameMismatch ? 'APROBAR\nTERCERO' : 'BLINDAR'}</span>
+                             </button>
+                          ) : <div className="h-full w-full bg-zinc-800/50 rounded-lg text-[9px] font-bold text-zinc-500 flex items-center justify-center text-center border border-zinc-800">MANUAL</div>}
+                       </div>
                     </div>
                   </div>
                 ))}
-              </div>
-            </div>
+             </div>
           </div>
         </div>
       </div>
