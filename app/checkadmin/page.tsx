@@ -1,44 +1,19 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-// FIX: Importamos los tipos necesarios de Firebase
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, signInAnonymously, Auth, User as FirebaseUser } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, onSnapshot, getDoc, Firestore } from 'firebase/firestore';
+
+// --- IMPORTACIONES COMPLETAS ---
 import {
-  ShieldCheck,
-  Upload,
-  RefreshCw,
-  CheckCircle2,
-  CheckCircle,
-  AlertCircle,
-  Search,
-  Database,
-  ArrowRight,
-  Save,
-  Image as ImageIcon,
-  Scan,
-  FileText,
-  Loader2,
-  Eye,
-  Settings2,
-  AlertTriangle,
-  Lock,
-  History,
-  ShieldAlert,
-  Fingerprint,
-  Zap,
-  Info,
-  CreditCard,
-  Share2,
-  XCircle,
-  AlertOctagon,
-  Hash,
-  Calendar
+  ShieldCheck, RefreshCw, CheckCircle2, CheckCircle, AlertCircle, Search, ArrowRight,
+  Scan, FileText, Loader2, Eye, Settings2, AlertTriangle, Lock, History, ShieldAlert,
+  Fingerprint, Zap, Info, CreditCard, Share2, XCircle, AlertOctagon, Hash, Calendar,
+  Maximize2, Database, Image as ImageIcon, User, Wallet, FileWarning, Unlock, LogOut
 } from 'lucide-react';
 
-// --- CONFIGURACIÓN MAESTRA ---
-
+// --- CONFIGURACIÓN ---
 const CREDENTIALS = {
   FIREBASE: {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
@@ -52,27 +27,57 @@ const CREDENTIALS = {
 };
 
 const AIRTABLE_CONFIG_KEY = 'verificador_ruta_3_juanes_config';
+const ACCESS_PIN = "1026"; // <--- CAMBIA TU CONTRASEÑA AQUÍ
 
-// FIX: Definimos los tipos explícitamente. Ya no son 'any'.
 let app: FirebaseApp | undefined;
 let auth: Auth | undefined;
 let db: Firestore | undefined;
 
-if (typeof window !== "undefined") {
-  if (CREDENTIALS.FIREBASE.apiKey) {
-    try {
-        app = getApps().length === 0 ? initializeApp(CREDENTIALS.FIREBASE) : getApp();
-        auth = getAuth(app);
-        db = getFirestore(app);
-    } catch (error) {
-        console.error("Error inicializando Firebase:", error);
-    }
-  } else {
-    console.warn("Faltan credenciales de Firebase en .env.local");
+if (typeof window !== "undefined" && CREDENTIALS.FIREBASE.apiKey) {
+  try {
+    app = getApps().length === 0 ? initializeApp(CREDENTIALS.FIREBASE) : getApp();
+    auth = getAuth(app);
+    db = getFirestore(app);
+  } catch (error) {
+    console.error("🔥 Error Firebase:", error);
   }
 }
 
+interface Record {
+  id: string;
+  nombre: string;
+  cedula: string;
+  edad: string | number;
+  categoria: string;
+  valorEsperado: number;
+  fotoUrl: string | null;
+  docExtraido: string | null;
+  montoExtraido: number | null;
+  statusIA: 'pendiente' | 'escaneando' | 'listo' | 'error';
+}
+
+interface MatchResult {
+  bank: {
+    documento: string;
+    monto: number;
+    depositor: string;
+    esDuplicadoBanco: boolean;
+    esInterbancaria: boolean;
+  };
+  record: Record | null;
+  status: 'found' | 'missing' | 'fraud' | 'verified';
+  matchType: 'documento' | 'nombre';
+  claimedBy?: string;
+  nameMismatch: boolean;
+}
+
 export default function BunkerPage() {
+  // --- ESTADOS DE SEGURIDAD ---
+  const [isLocked, setIsLocked] = useState(true);
+  const [pinInput, setPinInput] = useState("");
+  const [pinError, setPinError] = useState(false);
+
+  // --- ESTADOS DE LA APP ---
   const [isMounted, setIsMounted] = useState(false);
   const [user, setUser] = useState<FirebaseUser | null>(null);
   
@@ -84,9 +89,9 @@ export default function BunkerPage() {
   });
 
   const [isConfigOpen, setIsConfigOpen] = useState(false);
-  const [airtableRecords, setAirtableRecords] = useState<any[]>([]);
+  const [airtableRecords, setAirtableRecords] = useState<Record[]>([]);
   const [bankData, setBankData] = useState("");
-  const [matches, setMatches] = useState<any[]>([]);
+  const [matches, setMatches] = useState<MatchResult[]>([]);
   const [historicalDocs, setHistoricalDocs] = useState<any>({});
   const [loading, setLoading] = useState(false);
   const [scanningId, setScanningId] = useState<string | null>(null);
@@ -96,55 +101,52 @@ export default function BunkerPage() {
 
   const appId = "bunker-anti-fraude-10k";
 
-  // 1. Control de montaje
+  // --- EFECTOS ---
   useEffect(() => {
     setIsMounted(true);
     const saved = localStorage.getItem(AIRTABLE_CONFIG_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
-      setConfig(prev => ({ 
-        ...prev, 
-        ...parsed,
-        apiKey: parsed.apiKey || process.env.NEXT_PUBLIC_AIRTABLE_API_KEY || ''
-      }));
-      
-      if (!parsed.apiKey && !process.env.NEXT_PUBLIC_AIRTABLE_API_KEY) {
-        setIsConfigOpen(true);
-      }
-    } else {
-      if (!process.env.NEXT_PUBLIC_AIRTABLE_API_KEY) {
-        setIsConfigOpen(true);
-      }
+      setConfig(prev => ({ ...prev, ...parsed, apiKey: parsed.apiKey || process.env.NEXT_PUBLIC_AIRTABLE_API_KEY || '' }));
     }
   }, []);
 
-  // 2. Seguridad: Autenticación Cloud
   useEffect(() => {
     if (!isMounted || !auth) return;
-    const initAuth = async () => {
-      try {
-        // FIX: Usamos ! para asegurar a TS que auth existe en este punto
-        await signInAnonymously(auth!); 
-      } catch (err) { console.error("Auth Error:", err); }
-    };
+    const initAuth = async () => { try { await signInAnonymously(auth!); } catch (err) { console.error(err); } };
     initAuth();
-    const unsubscribe = onAuthStateChanged(auth!, setUser);
-    return () => unsubscribe();
+    return onAuthStateChanged(auth!, setUser);
   }, [isMounted]);
 
-  // 3. Seguridad: Sincronización de Historial
   useEffect(() => {
     if (!user || !db) return;
-    const q = collection(db, 'artifacts', appId, 'public', 'data', 'verified_receipts');
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    return onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'verified_receipts'), (snap) => {
       const docs: any = {};
-      snapshot.forEach(d => { docs[d.id] = d.data(); });
+      snap.forEach(d => { docs[d.id] = d.data(); });
       setHistoricalDocs(docs);
-    }, (error) => console.error("Firestore Error:", error));
-    return () => unsubscribe();
+    });
   }, [user]);
 
-  const showStatus = (type: string, message: string) => {
+  // --- FUNCIONES DE SEGURIDAD ---
+  const handleUnlock = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pinInput === ACCESS_PIN) {
+      setIsLocked(false);
+      setPinError(false);
+    } else {
+      setPinError(true);
+      setPinInput("");
+      setTimeout(() => setPinError(false), 2000);
+    }
+  };
+
+  const handleLock = () => {
+    setIsLocked(true);
+    setPinInput("");
+  };
+
+  // --- FUNCIONES AUXILIARES ---
+  const showStatus = (type: 'success' | 'error', message: string) => {
     setStatus({ type, message });
     setTimeout(() => setStatus({ type: '', message: '' }), 5000);
   };
@@ -153,33 +155,34 @@ export default function BunkerPage() {
     e.preventDefault();
     localStorage.setItem(AIRTABLE_CONFIG_KEY, JSON.stringify(config));
     setIsConfigOpen(false);
-    showStatus('success', 'Llave de seguridad actualizada.');
+    showStatus('success', 'Configuración guardada.');
   };
 
+  const urlToBase64 = async (url: string) => {
+    try {
+      const response = await fetch(url, { mode: 'cors' });
+      if (!response.ok) await fetch(url);
+      const blob = await response.blob();
+      return new Promise<{ data: string; mimeType: string } | null>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve({ data: (reader.result as string).split(',')[1], mimeType: blob.type || "image/jpeg" });
+        reader.readAsDataURL(blob);
+      });
+    } catch (e) { return null; }
+  };
+
+  // --- LÓGICA DE NEGOCIO ---
   const fetchAirtableRecords = async () => {
-    if (!config.apiKey) { 
-        showStatus('error', 'Falta API Key de Airtable');
-        setIsConfigOpen(true); 
-        return; 
-    }
+    if (!config.apiKey) return setIsConfigOpen(true);
     setLoading(true);
     try {
-      const tableNameEncoded = encodeURIComponent(config.tableName || 'CRM 10k');
-      const formula = encodeURIComponent(`{Etapa}='${config.filterStage}'`);
-      
-      const response = await fetch(`https://api.airtable.com/v0/${config.baseId}/${tableNameEncoded}?filterByFormula=${formula}`, {
-        headers: { Authorization: `Bearer ${config.apiKey}` }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Airtable Error: ${response.status}`);
-      }
-
+      const url = `https://api.airtable.com/v0/${config.baseId}/${encodeURIComponent(config.tableName)}?filterByFormula=${encodeURIComponent(`{Etapa}='${config.filterStage}'`)}`;
+      const response = await fetch(url, { headers: { Authorization: `Bearer ${config.apiKey}` } });
       const data = await response.json();
       if (data.records) {
         setAirtableRecords(data.records.map((r: any) => ({
           id: r.id,
-          nombre: r.fields['nombre'] || 'Sin nombre',
+          nombre: r.fields['nombre'] || 'DESCONOCIDO',
           cedula: r.fields['cedula'] || 'S/N',
           edad: r.fields['edad'] || 'N/A',
           categoria: r.fields['categorias'] || 'N/A',
@@ -191,444 +194,452 @@ export default function BunkerPage() {
         })));
         showStatus('success', `${data.records.length} atletas cargados.`);
       }
-    } catch (e) { 
-        console.error(e);
-        showStatus('error', 'Error al sincronizar CRM. Revisa Configuración.'); 
-    }
-    finally { setLoading(false); }
+    } catch (e) { showStatus('error', 'Error Airtable.'); } finally { setLoading(false); }
   };
 
-  const urlToBase64 = async (url: string) => {
-    try {
-      const response = await fetch(url, { mode: 'cors' });
-      if (!response.ok) throw new Error("Error de red al cargar imagen");
-
-      const blob = await response.blob();
-      const mimeType = blob.type || "image/jpeg";
-
-      return new Promise<{ data: string; mimeType: string } | null>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const result = reader.result as string;
-          resolve({
-            data: result.split(',')[1],
-            mimeType: mimeType
-          });
-        };
-        reader.readAsDataURL(blob);
-      });
-    } catch (e) {
-      console.error("Base64 Error:", e);
-      return null;
-    }
-  };
-
-  const scanReceiptIA = async (record: any) => {
-    if (!record.fotoUrl) return null;
+  const scanReceiptIA = async (record: Record) => {
+    if (!record.fotoUrl) return;
     setAirtableRecords(prev => prev.map(r => r.id === record.id ? { ...r, statusIA: 'escaneando' } : r));
     setScanningId(record.id);
 
-    const apiKey = CREDENTIALS.GEMINI_KEY;
-    
-    if (!apiKey) {
-        showStatus('error', 'Falta GEMINI_API_KEY en configuración (.env.local).');
-        setAirtableRecords(prev => prev.map(r => r.id === record.id ? { ...r, statusIA: 'error' } : r));
-        setScanningId(null);
-        return;
-    }
-
     try {
-      const imageData = await urlToBase64(record.fotoUrl);
-      if (!imageData || !imageData.data) throw new Error("No se pudo descargar/leer la imagen");
+      const imageData: any = await urlToBase64(record.fotoUrl);
+      if (!imageData) throw new Error("CORS Block");
 
-      const prompt = `Analiza este comprobante de pago bancario. Extrae estrictamente el número de REFERENCIA/DOCUMENTO y el MONTO total.
-Si no encuentras un número claro, devuelve null.
-Responde SOLO este JSON: {"documento": "123456", "monto": 30.00}`;
-
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+      const prompt = `Analiza este comprobante de transferencia bancaria de Ecuador. Extrae el NÚMERO DE DOCUMENTO (comprobante, referencia o secuencial) y el MONTO. Responde SOLO este JSON: {"documento": "12345678", "monto": 20.00}`;
+      
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${CREDENTIALS.GEMINI_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{
-            parts: [
-              { text: prompt },
-              { inlineData: { mimeType: imageData.mimeType, data: imageData.data } }
-            ]
-          }],
-          generationConfig: { responseMimeType: "application/json" }
+          contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: imageData.mimeType, data: imageData.data } }] }]
         })
       });
 
-      if (!response.ok) {
-        throw new Error(`Gemini API Error: ${response.status}`);
-      }
-
       const result = await response.json();
-      const extractedText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+      const text = result.candidates?.[0]?.content?.parts?.[0]?.text.replace(/```json/g, '').replace(/```/g, '').trim();
+      const json = JSON.parse(text || "{}");
+      const docId = json.documento ? String(json.documento).replace(/\D/g, '') : null;
 
-      let extracted = { documento: null, monto: null };
-      try {
-        extracted = JSON.parse(extractedText);
-      } catch (jsonErr) {
-        console.warn("Error parseando JSON de IA, intentando limpieza...", extractedText);
-      }
-
-      const docId = extracted.documento ? String(extracted.documento).trim() : null;
-
-      setAirtableRecords(prev => prev.map(r =>
-        r.id === record.id ? { ...r, docExtraido: docId, montoExtraido: extracted.monto, statusIA: docId ? 'listo' : 'error' } : r
-      ));
+      setAirtableRecords(prev => prev.map(r => r.id === record.id ? { ...r, docExtraido: docId, montoExtraido: json.monto, statusIA: docId ? 'listo' : 'error' } : r));
     } catch (e) {
-      console.error("IA Critical Error:", e);
       setAirtableRecords(prev => prev.map(r => r.id === record.id ? { ...r, statusIA: 'error' } : r));
-      showStatus('error', 'Fallo de lectura IA. Revisa consola.');
     } finally { setScanningId(null); }
   };
 
   const scanAll = async () => {
     setIsScanningAll(true);
-    for (const record of airtableRecords.filter(r => r.fotoUrl && r.statusIA === 'pendiente')) {
-      await scanReceiptIA(record);
-    }
+    const pendings = airtableRecords.filter(r => r.fotoUrl && r.statusIA === 'pendiente');
+    for (const record of pendings) { await scanReceiptIA(record); await new Promise(r => setTimeout(r, 200)); }
     setIsScanningAll(false);
+    showStatus('success', 'Escaneo completado.');
   };
 
   const processMatches = () => {
-    // FIX: Reemplacé el flag /s por [\s\S] para compatibilidad con versiones antiguas de JS/TS
-    // Antes: /(TRANSFERENC.*?|DEPOSITO.*?)\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{4,12})\s+[CD]/gs;
-    const regex = /(TRANSFERENC[\s\S]*?|DEPOSITO[\s\S]*?)\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{4,12})\s+[CD]/g;
-    
+    if (!bankData.trim()) return showStatus('error', 'Faltan datos del banco.');
+
+    const regex = /(\d{2}\/\d{2}\/\d{4})\s+(\d{4,12})\s+([CD])/g;
     let match;
     const bankEntries = [];
-    const seenBankDocs = new Set();
-    const internalDuplicatesBank = new Set();
+    const seen = new Set();
+    const internalDupes = new Set();
 
     while ((match = regex.exec(bankData)) !== null) {
-      const fullConcept = match[1].replace(/\n/g, ' ').trim();
-      const docNum = match[3];
-      // FIX: Regex compatible
-      const depositorName = fullConcept.replace(/(TRANSFERENC\s+IA\s+(DIRECTA|INTERBANCARI)\s+A?\s+DE\s+|DEP\s+CNB\s+)/i, '').trim();
+      const docNum = match[2];
+      const context = bankData.substring(match.index, match.index + 250);
+      
+      if (seen.has(docNum)) internalDupes.add(docNum);
+      seen.add(docNum);
 
-      if (seenBankDocs.has(docNum)) internalDuplicatesBank.add(docNum);
-      seenBankDocs.add(docNum);
+      const lineEnd = bankData.indexOf('\n', match.index);
+      const fullLine = bankData.substring(match.index, lineEnd !== -1 ? lineEnd : undefined);
+      let depositor = fullLine.replace(/TRANSFERENC.*?DE\s+|DEP\s+CNB\s+|CONST\.\s+RECAUDACION\s+/i, '').replace(/[\d\/]/g, '').trim();
+      
+      const amountMatch = context.match(/(\d{1,4}[.,]\d{2})(?!\d)/);
+      let monto = 0;
+      if (amountMatch) monto = parseFloat(amountMatch[0].replace(',', '.'));
 
-      const amountSearchPart = bankData.substring(match.index, match.index + 250);
-      const amountMatch = amountSearchPart.match(/(\d{1,4}(,\d{3})*(\.\d{2}))/);
+      const esInterbancaria = fullLine.toLowerCase().includes('interbancari');
 
-      bankEntries.push({
-        documento: docNum,
-        monto: amountMatch ? parseFloat(amountMatch[0].replace(',', '')) : 0,
-        depositor: depositorName,
-        esDuplicadoBanco: internalDuplicatesBank.has(docNum),
-        esInterbancaria: fullConcept.toLowerCase().includes('interbancari')
-      });
+      bankEntries.push({ documento: docNum, monto, depositor, esInterbancaria, esDuplicadoBanco: internalDupes.has(docNum) });
     }
 
-    const assignedRecordIds = new Set();
-
+    const assignedIds = new Set();
     const newMatches = bankEntries.map(bank => {
-      let matchingRecord = airtableRecords.find(r => r.docExtraido === bank.documento);
+      let record = airtableRecords.find(r => r.docExtraido === bank.documento);
       let matchType = 'documento';
 
-      if (!matchingRecord && bank.depositor && bank.depositor.length > 5) {
-        matchingRecord = airtableRecords.find(r => {
-          if (assignedRecordIds.has(r.id)) return false;
-          const crmParts = r.nombre.toLowerCase().split(' ').filter((p: string) => p.length > 3);
-          const bankName = bank.depositor.toLowerCase();
-          return crmParts.filter((part: string) => bankName.includes(part)).length >= 2;
-        });
-        if (matchingRecord) matchType = 'nombre';
+      if (!record && bank.esInterbancaria) {
+         record = airtableRecords.find(r => {
+            if (assignedIds.has(r.id)) return false;
+            const bankNameParts = bank.depositor.split(' ').filter((p: string) => p.length > 3);
+            return bankNameParts.some((p: string) => r.nombre.toUpperCase().includes(p.toUpperCase()));
+         });
+         if (record) matchType = 'nombre';
       }
 
-      if (matchingRecord) assignedRecordIds.add(matchingRecord.id);
-
-      const isClaimed = historicalDocs[bank.documento];
+      if (record) assignedIds.add(record.id);
+      const historical = historicalDocs[bank.documento];
 
       let nameMismatch = false;
-      if (matchingRecord && matchType === 'documento' && bank.depositor) {
-        const crmParts = matchingRecord.nombre.toLowerCase().split(' ').filter((p: string) => p.length > 3);
-        const bankName = bank.depositor.toLowerCase();
-        nameMismatch = !crmParts.some((part: string) => bankName.includes(part));
+      if (record && !matchType.includes('nombre')) {
+         const crmName = record.nombre.toUpperCase();
+         const bankName = bank.depositor.toUpperCase();
+         if (bankName.length > 5 && !crmName.includes(bankName) && !bankName.includes(crmName)) {
+            nameMismatch = true;
+         }
       }
 
       return {
         bank,
-        record: matchingRecord || null,
-        status: isClaimed ? 'fraud' : (matchingRecord ? 'found' : 'missing'),
+        record: record || null,
+        status: historical ? 'fraud' : (record ? 'found' : 'missing'),
         matchType,
-        claimedBy: isClaimed ? isClaimed.atleta : null,
+        claimedBy: historical?.atleta,
         nameMismatch
       };
     });
 
     setMatches(newMatches);
+    if (newMatches.length > 0) showStatus('success', 'Conciliación ejecutada.');
+    else showStatus('error', 'No se encontraron datos válidos.');
   };
 
-  const confirmInCRM = async (recordId: string, bankDoc: string, athleteName: string, amount: number) => {
-    if (!user || !db) return; 
+  const confirmInCRM = async (match: any) => {
+    if (!user || !match.record) return;
     setLoading(true);
     try {
-      const historyRef = doc(db, 'artifacts', appId, 'public', 'data', 'verified_receipts', bankDoc);
-      const historySnap = await getDoc(historyRef);
-      if (historySnap.exists()) {
-        showStatus('error', '¡BLOQUEO! Documento ya registrado.');
+      const { id, nombre } = match.record;
+      const { documento, monto } = match.bank;
+
+      const docRef = doc(db!, 'artifacts', appId, 'public', 'data', 'verified_receipts', documento);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        showStatus('error', 'FRAUDE: Documento ya usado.');
         setLoading(false);
         return;
       }
 
-      await fetch(`https://api.airtable.com/v0/${config.baseId}/${encodeURIComponent(config.tableName)}/${recordId}`, {
+      await fetch(`https://api.airtable.com/v0/${config.baseId}/${encodeURIComponent(config.tableName)}/${id}`, {
         method: 'PATCH',
         headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           fields: {
-            'Etapa': 'Notificar',
-            'Numero Comprobante': bankDoc,
-            'Comentarios': `VALIDACIÓN OK: Doc ${bankDoc} | Monto $${amount} | ${new Date().toLocaleString()}`
+            'Etapa': 'Notificar', 
+            'Numero Comprobante': documento,
+            'Comentarios': `✅ VALIDADO: Doc ${documento} | $${monto} | IA`
           }
         })
       });
 
-      await setDoc(historyRef, {
-        atleta: athleteName,
-        fecha: new Date().toISOString(),
-        recordId: recordId,
-        monto: amount,
-        verificadoPor: user.uid
-      });
-
-      setMatches(prev => prev.map(m => m.record?.id === recordId ? { ...m, status: 'verified' } : m));
-      showStatus('success', 'Blindado y movido a NOTIFICAR.');
-    } catch (e) { showStatus('error', 'Fallo en la validación.'); }
-    finally { setLoading(false); }
+      await setDoc(docRef, { atleta: nombre, fecha: new Date().toISOString(), monto, uid: user.uid });
+      setMatches(prev => prev.map(m => m.bank.documento === documento ? { ...m, status: 'verified' } : m));
+      showStatus('success', 'Blindado exitosamente.');
+    } catch (e) { showStatus('error', 'Error al guardar.'); } finally { setLoading(false); }
   };
 
   if (!isMounted) return null;
 
-  return (
-    <div className="min-h-screen bg-[#020617] p-4 md:p-8 font-sans text-slate-200">
-      <div className="max-w-7xl mx-auto">
-        <header className="bg-slate-900/80 backdrop-blur-2xl p-7 rounded-[2.8rem] border border-slate-800 mb-10 flex flex-col md:flex-row justify-between items-center gap-6 shadow-2xl relative">
-          <div className="flex items-center gap-7">
-            <div className="bg-yellow-400 p-5 rounded-[2rem] shadow-[0_0_50px_rgba(250,204,21,0.25)] text-slate-950">
-              <ShieldCheck size={42} strokeWidth={2.5}/>
-            </div>
-            <div>
-              <h1 className="text-3xl font-black uppercase italic tracking-tighter text-white leading-none">Búnker Anti-Fraude 10k</h1>
-              <div className="flex items-center gap-3 mt-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-ping"></div>
-                <p className="text-slate-500 text-[10px] font-black tracking-[0.4em] uppercase tracking-widest leading-none">CLOUD SECURITY • NOTIFICAR STAGE</p>
-              </div>
+  // --- VISTA DE BLOQUEO DE SEGURIDAD ---
+  if (isLocked) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
+        <div className="bg-zinc-900 border-2 border-zinc-800 p-10 rounded-[2.5rem] shadow-2xl w-full max-w-sm text-center relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-500"></div>
+          
+          <div className="mb-8 flex justify-center">
+            <div className="bg-zinc-800 p-5 rounded-2xl shadow-lg shadow-sky-500/10 border border-zinc-700">
+              <Lock size={40} className="text-sky-500" strokeWidth={2}/>
             </div>
           </div>
-          <div className="flex gap-3">
-            <button onClick={fetchAirtableRecords} className="px-10 py-5 bg-yellow-400 text-slate-950 rounded-[1.5rem] text-xs font-black hover:bg-yellow-300 transition-all shadow-xl active:scale-95 flex items-center gap-3">
-              <RefreshCw size={18} className={loading ? "animate-spin" : ""}/> 1. CARGAR CRM
+          
+          <h1 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">Búnker 10k</h1>
+          <p className="text-zinc-500 text-[10px] font-bold tracking-[0.4em] uppercase mb-8">Acceso Restringido</p>
+          
+          <form onSubmit={handleUnlock} className="space-y-6">
+            <div className="relative">
+              <input 
+                type="password" 
+                maxLength={4}
+                className={`w-full p-4 bg-zinc-950 border-2 rounded-xl text-center text-3xl text-white font-mono tracking-[1em] focus:outline-none transition-all ${pinError ? 'border-rose-500 animate-pulse' : 'border-zinc-800 focus:border-sky-500'}`}
+                placeholder="••••"
+                value={pinInput}
+                onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))}
+                autoFocus
+              />
+            </div>
+            
+            <button type="submit" className="w-full py-4 bg-sky-600 hover:bg-sky-500 text-white font-black rounded-xl uppercase tracking-widest text-xs transition-all active:scale-95 shadow-lg flex items-center justify-center gap-2">
+              <Unlock size={14}/> Desbloquear Terminal
             </button>
-            <button onClick={() => setIsConfigOpen(true)} className="p-4 bg-slate-800 text-slate-400 rounded-2xl hover:text-white transition-all shadow-lg border border-slate-700">
-              <Settings2 size={24}/>
+          </form>
+          
+          {pinError && (
+             <p className="mt-4 text-rose-500 text-[10px] font-black uppercase tracking-widest animate-bounce">Código Incorrecto</p>
+          )}
+
+          <div className="mt-8 pt-6 border-t border-zinc-800/50">
+            <p className="text-[9px] text-zinc-600 font-mono">ID DISPOSITIVO: {typeof window !== 'undefined' ? window.navigator.userAgent.substring(0, 15) : 'UNK'}...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- VISTA DEL DASHBOARD (SI NO ESTÁ BLOQUEADO) ---
+  return (
+    <div className="min-h-screen bg-zinc-950 p-4 md:p-6 font-sans text-zinc-200">
+      <div className="max-w-[1920px] mx-auto space-y-6">
+        
+        {/* HEADER */}
+        <header className="bg-zinc-900/80 p-4 md:p-6 rounded-3xl border border-zinc-800 flex flex-col md:flex-row justify-between items-center gap-4 shadow-xl backdrop-blur-sm">
+          <div className="flex items-center gap-4">
+            <div className="bg-sky-500/20 p-3 rounded-2xl text-sky-400 shadow-[0_0_20px_rgba(14,165,233,0.15)] border border-sky-500/30">
+              <ShieldCheck size={32} strokeWidth={2}/>
+            </div>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tighter text-white">Búnker 10k <span className="text-sky-400">Pro</span></h1>
+              <p className="text-zinc-400 text-xs font-bold tracking-[0.2em] uppercase">Centro de Verificación de Pagos</p>
+            </div>
+          </div>
+          <div className="flex gap-3 w-full md:w-auto items-center">
+            <button onClick={fetchAirtableRecords} disabled={loading} className="flex-1 md:flex-none px-6 py-3 bg-sky-500 hover:bg-sky-400 text-white rounded-xl text-sm font-bold flex justify-center items-center gap-2 transition-all active:scale-95 disabled:opacity-50 shadow-lg shadow-sky-500/20">
+              <RefreshCw size={18} className={loading ? "animate-spin" : ""} /> <span>Sincronizar CRM</span>
+            </button>
+            <button onClick={() => setIsConfigOpen(true)} className="p-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl border border-zinc-700 text-zinc-400 hover:text-white transition-all">
+              <Settings2 size={20}/>
+            </button>
+            <button onClick={handleLock} className="p-3 bg-rose-900/20 hover:bg-rose-900/40 rounded-xl border border-rose-900/30 text-rose-500 transition-all ml-2" title="Bloquear Pantalla">
+              <LogOut size={20}/>
             </button>
           </div>
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* LADO IZQUIERDO: SCANNER */}
-          <div className="lg:col-span-4 space-y-6">
-            <div className="bg-slate-900/40 border border-slate-800 p-8 rounded-[3rem] shadow-2xl relative overflow-hidden">
-              <div className="flex justify-between items-center mb-10">
-                <h2 className="text-[11px] font-black uppercase text-slate-500 tracking-[0.2em] flex items-center gap-3">
-                  <Fingerprint size={18} className="text-blue-500"/> Lector OCR
+        {/* LAYOUT PRINCIPAL RESPONSIVE */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          
+          {/* COLUMNA IZQUIERDA: SCANNER (3 cols en desktop) */}
+          <div className="lg:col-span-3 flex flex-col gap-4 h-[500px] lg:h-[calc(100vh-180px)] min-h-[500px]">
+            <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-3xl flex-1 flex flex-col overflow-hidden relative shadow-2xl">
+              
+              <div className="flex justify-between items-center mb-4 pb-4 border-b border-zinc-800">
+                <h2 className="text-sm font-black uppercase text-zinc-500 tracking-widest flex gap-2 items-center">
+                  <Fingerprint size={16} className="text-sky-500"/> OCR ({airtableRecords.length})
                 </h2>
-                <button
-                  onClick={scanAll}
-                  disabled={isScanningAll || airtableRecords.length === 0}
-                  className="text-[10px] font-black bg-blue-600 text-white px-7 py-3 rounded-2xl hover:bg-blue-500 shadow-xl"
+                <button 
+                  onClick={scanAll} 
+                  disabled={isScanningAll || airtableRecords.length === 0} 
+                  className="text-[10px] font-bold bg-sky-600/20 text-sky-400 hover:bg-sky-600/40 border border-sky-500/30 px-3 py-1.5 rounded-lg flex gap-2 items-center transition-all disabled:opacity-30"
                 >
-                  {isScanningAll ? "PROCESANDO..." : "LEER TODO"}
+                  {isScanningAll ? <Loader2 className="animate-spin" size={12}/> : <Scan size={12}/>} 
+                  {isScanningAll ? "..." : "LEER"}
                 </button>
               </div>
-              <div className="space-y-4 max-h-[550px] overflow-y-auto pr-3 custom-scrollbar">
-                {airtableRecords.map(record => (
-                  <div key={record.id} className={`p-5 rounded-[2rem] border-2 transition-all group ${
-                    record.statusIA === 'listo' ? 'bg-blue-900/20 border-blue-500/40 shadow-[0_0_20px_rgba(59,130,246,0.05)]' : 'bg-slate-800/30 border-slate-800'
+              
+              <div className="flex-1 overflow-y-auto pr-2 space-y-3 custom-scrollbar">
+                {airtableRecords.length === 0 && (
+                  <div className="h-full flex flex-col items-center justify-center text-zinc-700 gap-3 opacity-60">
+                    <Database size={40} strokeWidth={1.5}/>
+                    <p className="text-xs font-bold uppercase tracking-widest">Sin datos</p>
+                  </div>
+                )}
+                {airtableRecords.map(r => (
+                  <div key={r.id} className={`p-3 rounded-xl border transition-all group ${
+                    r.statusIA === 'listo' ? 'bg-sky-950/30 border-sky-500/30' : 
+                    r.statusIA === 'error' ? 'bg-rose-950/20 border-rose-500/30' : 
+                    'bg-zinc-800/30 border-zinc-800 hover:border-zinc-700'
                   }`}>
-                    <div className="flex justify-between items-start">
+                    <div className="flex justify-between items-start gap-2">
                       <div className="min-w-0 flex-1">
-                        <p className="text-[13px] font-black uppercase truncate text-white tracking-tight">{record.nombre}</p>
-                        <div className="flex gap-2 mt-1">
-                          <span className="text-[9px] font-bold text-slate-500 uppercase">{record.categoria}</span>
+                        <p className="text-xs font-bold text-white truncate group-hover:text-sky-300 transition-colors">{r.nombre}</p>
+                        <div className="flex flex-wrap items-center gap-1 mt-1">
+                           <span className="text-[9px] text-zinc-500 font-mono">{r.cedula}</span>
                         </div>
-                        {record.docExtraido && (
-                          <div className="mt-4 inline-flex items-center gap-2 text-[11px] font-black text-blue-400 bg-blue-950/50 px-3 py-2 rounded-xl border border-blue-800/50 shadow-inner">
-                            <CheckCircle size={14}/> ID: {record.docExtraido}
-                          </div>
-                        )}
                       </div>
-                      <div className="flex flex-col gap-2 ml-4">
-                        {record.fotoUrl && <button onClick={() => setSelectedImage(record.fotoUrl)} className="p-3 bg-slate-800 rounded-2xl text-slate-400 hover:text-white shadow-lg"><Eye size={18}/></button>}
-                        <button onClick={() => scanReceiptIA(record)} disabled={scanningId === record.id} className={`p-3 rounded-2xl transition-all shadow-lg ${record.statusIA === 'listo' ? 'bg-green-600 text-white' : 'bg-slate-700 text-blue-400'}`}>
-                          {scanningId === record.id ? <Loader2 size={18} className="animate-spin"/> : <Scan size={18}/>}
+                      
+                      <div className="flex items-center gap-1 shrink-0">
+                         {r.fotoUrl && (
+                          <button onClick={() => setSelectedImage(r.fotoUrl)} className="p-1.5 bg-zinc-800/50 rounded-md hover:bg-sky-500/20 text-zinc-400 hover:text-sky-300 transition-all">
+                            <Eye size={14}/>
+                          </button>
+                        )}
+                        <button onClick={() => scanReceiptIA(r)} disabled={scanningId === r.id} className="p-1.5 bg-zinc-800/50 rounded-md hover:bg-sky-500/20 text-zinc-400 hover:text-sky-300 transition-all disabled:opacity-50">
+                          {scanningId === r.id ? <Loader2 size={14} className="animate-spin text-sky-400"/> : <Scan size={14}/>}
                         </button>
                       </div>
                     </div>
+
+                    {r.docExtraido && (
+                      <div className="mt-2 pt-2 border-t border-zinc-800/50 flex items-center justify-between text-[10px] font-mono">
+                        <div className="flex items-center gap-1 text-sky-400 font-bold truncate"><Hash size={10}/> {r.docExtraido}</div>
+                        <div className="text-emerald-400 font-bold">${r.montoExtraido?.toFixed(2)}</div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             </div>
-
-            <div className="bg-slate-900 border border-slate-800 p-8 rounded-[3.5rem] shadow-2xl relative overflow-hidden group">
-              <div className="absolute -right-8 -top-8 text-slate-800/20 group-hover:scale-110 transition-transform duration-1000">
-                <ShieldAlert size={180} />
-              </div>
-              <div className="relative z-10">
-                <div className="flex items-center gap-4 mb-4">
-                  <History className="text-yellow-400" size={28}/>
-                  <h3 className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-400">Escudo Global</h3>
-                </div>
-                <p className="text-6xl font-black text-white tracking-tighter">{Object.keys(historicalDocs).length}</p>
-                <p className="text-slate-500 text-[10px] uppercase font-bold mt-3 leading-relaxed tracking-wider">Comprobantes ya detectados anteriormente</p>
-              </div>
-            </div>
           </div>
 
-          {/* LADO DERECHO: CONCILIACIÓN */}
-          <div className="lg:col-span-8 space-y-8">
-            <div className="bg-slate-900/50 border border-slate-800 p-8 rounded-[3rem] shadow-2xl">
-              <h2 className="text-[11px] font-black uppercase text-slate-500 mb-6 flex items-center gap-3 tracking-[0.3em]">
-                <FileText size={20} className="text-yellow-500"/> Paso 3: Movimientos Bancarios
-              </h2>
-              <textarea
-                className="w-full h-44 p-7 bg-slate-950 border-2 border-slate-800 rounded-[2.5rem] focus:border-yellow-400 outline-none text-xs font-mono text-slate-300 shadow-inner transition-all"
-                placeholder="Pega aquí el detalle de movimientos de tu banca web..."
-                value={bankData}
-                onChange={(e) => setBankData(e.target.value)}
-              />
-              <button onClick={processMatches} className="w-full mt-8 py-7 bg-yellow-400 text-slate-950 font-black rounded-[2.2rem] hover:bg-yellow-300 shadow-[0_20px_50px_rgba(250,204,21,0.2)] active:scale-[0.98] transition-all flex items-center justify-center gap-5 uppercase italic tracking-tighter text-lg">
-                VINCULAR BANCO Y BLINDAR <ArrowRight size={32}/>
+          {/* COLUMNA DERECHA: MATCHER (9 cols) */}
+          <div className="lg:col-span-9 flex flex-col gap-6 h-auto lg:h-[calc(100vh-180px)]">
+            
+            {/* ÁREA DE INPUT */}
+            <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-3xl shadow-xl flex flex-col md:flex-row gap-4 shrink-0">
+              <div className="flex-1">
+                <div className="relative">
+                  <textarea 
+                    className="w-full h-24 p-4 bg-zinc-950/50 border-2 border-zinc-800 rounded-2xl text-sm font-mono text-zinc-300 resize-none focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all placeholder:text-zinc-600" 
+                    placeholder="Pega aquí el texto del banco..." 
+                    value={bankData} 
+                    onChange={(e) => setBankData(e.target.value)}
+                  />
+                  <div className="absolute bottom-4 right-4 text-zinc-600 pointer-events-none"><Wallet size={16}/></div>
+                </div>
+              </div>
+              <button 
+                onClick={processMatches} 
+                className="w-full md:w-40 bg-gradient-to-br from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white rounded-2xl border-0 flex flex-col items-center justify-center gap-1 transition-all active:scale-95 group shadow-lg shadow-sky-500/25 py-4 md:py-0"
+              >
+                <ArrowRight size={24} className="group-hover:translate-x-1 transition-transform"/>
+                <span className="text-[10px] font-black uppercase text-center leading-tight tracking-wider">EJECUTAR<br/>CRUCE</span>
               </button>
             </div>
 
-            <div className="bg-slate-900/50 border border-slate-800 p-8 rounded-[3.5rem] shadow-2xl min-h-[600px]">
-              <h2 className="text-[11px] font-black uppercase text-slate-500 mb-10 flex items-center gap-3 tracking-[0.3em]">
-                <Search size={22} className="text-blue-500"/> Resultados con Datos de Atleta
+            {/* ÁREA DE RESULTADOS */}
+            <div className="bg-zinc-900/80 border border-zinc-800 p-4 md:p-6 rounded-3xl flex-1 overflow-y-auto custom-scrollbar relative shadow-inner backdrop-blur-md">
+              <h2 className="text-sm font-black uppercase text-zinc-500 mb-6 sticky top-0 bg-zinc-900/95 py-3 z-10 flex gap-2 items-center border-b border-zinc-800">
+                <Search size={18} className="text-sky-500"/> Resultados del Cruce
               </h2>
-
-              <div className="space-y-8">
-                {matches.length === 0 ? (
-                  <div className="py-40 text-center opacity-10">
-                    <Search size={100} className="mx-auto mb-8" />
-                    <p className="font-black uppercase text-sm tracking-[0.8em]">Seguridad en Espera</p>
+              
+              <div className="grid gap-6 pb-6">
+                {matches.length === 0 && (
+                  <div className="text-center py-20 text-zinc-600 flex flex-col items-center gap-4 opacity-50">
+                    <div className="p-6 bg-zinc-800/50 rounded-full"><Search size={40} strokeWidth={1.5}/></div>
+                    <p className="text-sm uppercase font-bold tracking-widest">Esperando datos para procesar...</p>
                   </div>
-                ) : matches.map((match, i) => (
-                  <div key={i} className={`p-8 rounded-[3.5rem] border-2 transition-all relative group shadow-2xl ${
-                    match.status === 'verified' ? 'bg-slate-950/50 border-slate-900 opacity-40 grayscale' :
-                    match.status === 'fraud' || match.bank.esDuplicadoBanco ? 'bg-red-950/30 border-red-500 ring-8 ring-red-500/5' :
-                    match.status === 'found' ? (match.matchType === 'nombre' ? 'bg-blue-950/40 border-blue-500/50 shadow-blue-500/10' : 'bg-slate-900 border-slate-700 hover:border-blue-400/50') : 'bg-slate-950/50 border-slate-900'
+                )}
+                
+                {matches.map((m, i) => (
+                  <div key={i} className={`rounded-2xl border-2 transition-all relative overflow-hidden shadow-md ${
+                    m.status === 'verified' ? 'bg-emerald-950/10 border-emerald-500/30 opacity-70 grayscale-[50%]' :
+                    m.status === 'fraud' || m.bank.esDuplicadoBanco ? 'bg-rose-950/20 border-rose-500/50' :
+                    m.status === 'found' ? 'bg-zinc-800/50 border-emerald-500/40 shadow-emerald-500/5' : 'bg-zinc-900 border-zinc-800'
                   }`}>
+                    
+                    {/* --- BANNERS DE ALERTA --- */}
+                    <div className="flex flex-col">
+                      {m.status === 'fraud' && (
+                        <div className="w-full bg-rose-500 text-white p-2 flex items-center justify-center gap-2 animate-pulse font-black uppercase text-xs tracking-widest">
+                          <AlertOctagon size={16}/> ¡POSIBLE ESTAFA! Documento ya usado por: {m.claimedBy}
+                        </div>
+                      )}
+                      {m.bank.esDuplicadoBanco && !m.status.includes('fraud') && (
+                         <div className="w-full bg-rose-500/80 text-white p-1.5 flex items-center justify-center gap-2 font-bold uppercase text-[10px] tracking-widest">
+                          <AlertTriangle size={14}/> Duplicado en esta lista
+                        </div>
+                      )}
+                      {m.record && m.nameMismatch && m.status !== 'fraud' && (
+                        <div className="w-full bg-amber-500 text-zinc-900 p-1.5 flex items-center justify-center gap-2 font-black uppercase text-[10px] tracking-widest">
+                          <AlertTriangle size={14}/> Nombre no coincide (Posible Pago de Tercero)
+                        </div>
+                      )}
+                      {m.bank.esInterbancaria && (
+                        <div className="w-full bg-blue-600 text-white p-1 flex items-center justify-center gap-2 font-bold uppercase text-[9px] tracking-widest">
+                          <Info size={12}/> Interbancaria
+                        </div>
+                      )}
+                    </div>
 
-                    {(match.status === 'fraud' || match.bank.esDuplicadoBanco) && (
-                      <div className="absolute top-0 right-0 bg-red-600 text-white text-[11px] font-black px-10 py-4 rounded-bl-[2.5rem] flex items-center gap-3 shadow-2xl animate-pulse z-20 uppercase">
-                        <AlertOctagon size={20}/> FRAUDE O DUPLICADO DETECTADO
-                      </div>
-                    )}
-
-                    <div className="flex flex-col xl:flex-row justify-between items-center gap-10">
-                      <div className="flex-1 flex flex-col md:flex-row gap-10 items-center w-full">
-                        {match.record?.fotoUrl && (
-                          <div className="relative shrink-0 cursor-pointer overflow-hidden rounded-[2.5rem] border-4 border-slate-800 shadow-[0_20px_40px_rgba(0,0,0,0.5)] group-hover:border-yellow-400 transition-all scale-100 hover:scale-105" onClick={() => setSelectedImage(match.record.fotoUrl)}>
-                            <img src={match.record.fotoUrl} className="w-48 h-48 object-cover" alt="comprobante" />
-                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all">
-                              <Eye size={32} className="text-white"/>
-                            </div>
-                            <div className="absolute bottom-0 inset-x-0 bg-yellow-400 py-1.5 text-slate-950 text-[9px] font-black text-center uppercase tracking-widest">Ver Foto</div>
+                    <div className="p-4 md:p-5 flex flex-col md:flex-row gap-6 items-stretch">
+                      
+                      {/* --- COMPARACIÓN LADO A LADO --- */}
+                      <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        
+                        {/* DATO BANCO */}
+                        <div className="bg-zinc-950/50 p-4 rounded-xl border border-zinc-800 flex flex-col justify-center relative overflow-hidden">
+                           <div className="absolute top-0 right-0 p-2 opacity-5"><CreditCard size={64}/></div>
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest bg-zinc-900 px-2 py-1 rounded">BANCO</span>
                           </div>
-                        )}
-
-                        <div className="min-w-0 flex-1 space-y-6">
-                          <div className="flex flex-wrap items-center gap-5">
-                            <div className={`px-5 py-2.5 rounded-2xl text-[12px] font-black tracking-tight flex items-center gap-3 shadow-inner ${match.bank.esInterbancaria ? 'bg-blue-600 text-white shadow-blue-500/20' : 'bg-slate-100 text-slate-950 shadow-md'}`}>
-                              {match.bank.esInterbancaria ? <Share2 size={18}/> : <CreditCard size={18}/>}
-                              ID BANCO: {match.bank.documento}
-                            </div>
-                            <span className="text-4xl font-black text-green-400 tracking-tighter">${match.bank.monto.toFixed(2)}</span>
+                          <div className="text-3xl font-black text-white tracking-tighter tabular-nums">{m.bank.documento}</div>
+                          <div className="text-2xl font-bold text-emerald-400 tabular-nums mt-0.5">${m.bank.monto.toFixed(2)}</div>
+                          <div className="text-[10px] font-mono text-zinc-400 mt-2 uppercase truncate border-t border-zinc-800 pt-2" title={m.bank.depositor}>
+                            {m.bank.depositor || 'NO DISPONIBLE'}
                           </div>
+                        </div>
 
-                          {match.record ? (
-                            <div className="space-y-5">
-                              <div>
-                                <h3 className="text-2xl font-black uppercase text-white leading-tight mb-3 tracking-tight">{match.record.nombre}</h3>
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                  <div className="bg-slate-800 border border-slate-700 p-3 rounded-2xl flex items-center gap-3">
-                                    <Hash size={16} className="text-slate-500"/>
-                                    <span className="text-[11px] font-black text-slate-200 uppercase tracking-tighter">CI: {match.record.cedula}</span>
-                                  </div>
-                                  <div className="bg-slate-800 border border-slate-700 p-3 rounded-2xl flex items-center gap-3">
-                                    <Calendar size={16} className="text-slate-500"/>
-                                    <span className="text-[11px] font-black text-slate-200 uppercase tracking-tighter">EDAD: {match.record.edad} AÑOS</span>
-                                  </div>
-                                  <div className="bg-slate-800 border border-slate-700 p-3 rounded-2xl flex items-center gap-3">
-                                    <Zap size={16} className="text-slate-500"/>
-                                    <span className="text-[11px] font-black text-slate-200 uppercase tracking-tighter">{match.record.categoria}</span>
-                                  </div>
-                                </div>
-                                {match.matchType === 'nombre' && (
-                                  <div className="mt-3 text-[11px] font-black text-blue-400 bg-blue-900/40 px-4 py-2 rounded-xl border border-blue-500/50 flex items-center gap-2 w-fit">
-                                    <Fingerprint size={14}/> MATCH POR NOMBRE (INTERBANCARIA)
-                                  </div>
+                        {/* DATO FOTO / CRM */}
+                        <div className={`p-4 rounded-xl border flex flex-col relative overflow-hidden ${m.record ? 'bg-sky-950/10 border-sky-500/20' : 'bg-rose-950/10 border-rose-500/20'}`}>
+                           <div className="absolute top-0 right-0 p-2 opacity-5"><ImageIcon size={64}/></div>
+                          {m.record ? (
+                            <>
+                              <div className="flex items-center justify-between gap-2 mb-2">
+                                <span className="text-[10px] font-bold text-sky-500 uppercase tracking-widest bg-sky-950/30 px-2 py-1 rounded border border-sky-500/20">FOTO IA</span>
+                                {m.record.fotoUrl && (
+                                  <button onClick={() => setSelectedImage(m.record!.fotoUrl)} className="text-[9px] bg-zinc-800 px-3 py-1 rounded-full text-zinc-300 hover:text-white border border-zinc-700 hover:border-zinc-500 transition-all uppercase font-bold flex items-center gap-1 z-10">
+                                    <Eye size={10}/> Ver
+                                  </button>
                                 )}
                               </div>
+                              
+                              <div className="text-2xl font-black text-white tracking-tight tabular-nums truncate">
+                                {m.record.docExtraido || '---'}
+                              </div>
+                               <div className="text-lg font-bold text-sky-400 tabular-nums mb-auto">
+                                {m.record.montoExtraido ? `$${m.record.montoExtraido.toFixed(2)}` : '---'}
+                              </div>
 
-                              <div className={`p-6 rounded-[2rem] border-2 flex flex-col gap-4 shadow-inner ${
-                                match.status === 'fraud' ? 'bg-red-500/10 border-red-500/30' :
-                                match.nameMismatch ? 'bg-yellow-500/10 border-yellow-500/30' : 'bg-green-500/10 border-green-500/30'
-                              }`}>
-                                <div className="flex items-center gap-4">
-                                  {match.status === 'fraud' ? <XCircle size={28} className="text-red-500 shrink-0"/> :
-                                   match.nameMismatch ? <AlertTriangle size={28} className="text-yellow-500 shrink-0"/> : <CheckCircle2 size={28} className="text-green-500 shrink-0"/>}
-                                  <div className="min-w-0 flex-1">
-                                    <p className={`text-[12px] font-black uppercase tracking-widest ${match.status === 'fraud' ? 'text-red-500' : match.nameMismatch ? 'text-yellow-500' : 'text-green-500'}`}>
-                                      {match.status === 'fraud' ? `YA RECLAMADO POR ${match.claimedBy}` :
-                                       match.nameMismatch ? 'DIFERENCIA DE IDENTIDAD (PAGO DE TERCERO)' : 'ATLETA VALIDADO CORRECTAMENTE'}
-                                    </p>
-                                    <p className="text-base text-white font-bold truncate mt-1">Titular en Banco: {match.bank.depositor || 'NO DISPONIBLE'}</p>
+                              <div className="mt-3 pt-3 border-t border-sky-500/20 relative z-10">
+                                <div className="flex justify-between items-end">
+                                  <div className="min-w-0">
+                                    <div className="text-[9px] text-sky-300/60 uppercase font-black tracking-widest mb-0.5">ATLETA</div>
+                                    <div className="text-sm font-black text-white uppercase truncate leading-tight w-full">{m.record.nombre}</div>
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-3 pt-3 border-t border-slate-800/50">
-                                  <Info size={16} className="text-slate-500"/>
-                                  <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest">
-                                    Lectura IA en Foto: <span className="text-blue-400">DOC {match.record.docExtraido || '---'}</span> | <span className="text-blue-400">MONTO ${match.record.montoExtraido || '0.00'}</span>
-                                  </p>
+                                <div className="flex flex-wrap gap-2 mt-2 text-[9px] text-zinc-400 font-medium">
+                                  <span className="bg-zinc-800 px-2 py-1 rounded border border-zinc-700">{m.record.cedula}</span>
+                                  <span className="bg-zinc-800 px-2 py-1 rounded border border-zinc-700">{m.record.edad} Años</span>
+                                  <span className="bg-zinc-800 px-2 py-1 rounded border border-zinc-700">{m.record.categoria}</span>
                                 </div>
                               </div>
-                            </div>
+                            </>
                           ) : (
-                            <div className="p-10 rounded-[2.5rem] bg-slate-950/60 border border-slate-800 flex items-center gap-6 shadow-inner">
-                              <ShieldAlert size={40} className="text-slate-700"/>
-                              <p className="text-xs font-bold text-slate-500 uppercase leading-relaxed tracking-widest">
-                                El sistema no encontró ninguna foto procesada que coincida con este número de movimiento o nombre de atleta.
-                              </p>
+                            <div className="h-full flex flex-col items-center justify-center text-rose-400/60 gap-3">
+                              <FileWarning size={32} strokeWidth={1.5}/>
+                              <span className="text-[10px] font-black uppercase text-center tracking-widest">Sin Coincidencia</span>
                             </div>
                           )}
                         </div>
+
                       </div>
 
-                      <div className="shrink-0 w-full xl:w-auto">
-                        {match.status === 'found' && (
-                          <button
-                            onClick={() => confirmInCRM(match.record.id, match.bank.documento, match.record.nombre, match.bank.monto)}
-                            className={`w-full xl:w-auto px-16 py-8 text-slate-950 text-sm font-black rounded-[2.5rem] shadow-2xl active:scale-95 transition-all uppercase italic tracking-widest ${match.matchType === 'nombre' ? 'bg-blue-400 hover:bg-blue-300 shadow-blue-500/20' : 'bg-green-500 hover:bg-green-400 shadow-green-500/20'}`}
+                      {/* --- BOTÓN DE ACCIÓN --- */}
+                      <div className="w-full md:w-48 shrink-0 flex flex-col justify-center">
+                        {m.status === 'verified' ? (
+                          <div className="h-full w-full bg-emerald-900/20 rounded-xl border border-emerald-500/30 flex flex-col items-center justify-center gap-2 p-4">
+                            <CheckCircle2 size={40} className="text-emerald-500"/>
+                            <span className="text-xs font-black uppercase text-emerald-400 tracking-[0.2em]">BLINDADO</span>
+                          </div>
+                        ) : m.record && m.status !== 'fraud' && !m.bank.esDuplicadoBanco ? (
+                          <button 
+                            onClick={() => confirmInCRM(m)} 
+                            className={`h-full w-full rounded-xl text-xs font-black uppercase shadow-lg active:scale-95 transition-all flex flex-col items-center justify-center gap-2 p-4 ${
+                              m.nameMismatch ? 'bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white shadow-amber-500/30' : 'bg-gradient-to-br from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white shadow-emerald-500/30'
+                            }`}
                           >
-                            BLINDAR Y PASAR A NOTIFICAR
+                            <ShieldCheck size={28}/>
+                            <span className="text-center leading-tight tracking-wider">
+                              {m.nameMismatch ? 'APROBAR\nTERCERO' : 'BLINDAR\nY APROBAR'}
+                            </span>
                           </button>
-                        )}
-                        {match.status === 'verified' && (
-                          <div className="flex flex-col items-center gap-3 text-green-500">
-                            <div className="bg-green-500/10 p-6 rounded-full shadow-inner border border-green-500/20">
-                              <CheckCircle2 size={80} strokeWidth={3}/>
-                            </div>
-                            <span className="text-[11px] font-black uppercase tracking-[0.5em]">Blindado</span>
+                        ) : (
+                          <div className="h-full w-full bg-zinc-800/50 rounded-xl text-[10px] font-bold text-zinc-500 uppercase flex items-center justify-center text-center border border-zinc-800 p-4 tracking-wider">
+                            Requiere<br/>Revisión Manual
                           </div>
                         )}
                       </div>
+
                     </div>
                   </div>
                 ))}
@@ -638,48 +649,44 @@ Responde SOLO este JSON: {"documento": "123456", "monto": 30.00}`;
         </div>
       </div>
 
+      {/* --- MODALES Y TOASTS --- */}
       {selectedImage && (
-        <div className="fixed inset-0 bg-slate-950/98 backdrop-blur-3xl z-[100] flex flex-col items-center justify-center p-6 animate-in fade-in duration-300" onClick={() => setSelectedImage(null)}>
-          <img src={selectedImage} className="max-w-full max-h-[82vh] rounded-[4rem] shadow-[0_0_120px_rgba(0,0,0,0.9)] border-[15px] border-slate-900 animate-in zoom-in-95 duration-500" />
-          <button className="mt-12 px-24 py-7 bg-white text-slate-950 rounded-full text-xs font-black uppercase shadow-2xl tracking-[0.5em] hover:scale-110 active:scale-95 transition-all border-8 border-slate-100">
-            CERRAR INSPECCIÓN
+        <div className="fixed inset-0 bg-zinc-950/95 z-[100] flex flex-col items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setSelectedImage(null)}>
+          <img src={selectedImage} className="max-w-full max-h-[85vh] rounded-2xl shadow-2xl border border-zinc-800 animate-in zoom-in-95 duration-200" />
+          <button className="mt-6 flex items-center gap-2 px-6 py-3 bg-zinc-800 hover:bg-zinc-700 rounded-full text-white text-xs font-bold uppercase tracking-widest transition-all">
+            <XCircle size={16}/> Cerrar Vista Previa
           </button>
         </div>
       )}
-
+      
       {isConfigOpen && (
-        <div className="fixed inset-0 bg-slate-950/98 backdrop-blur-3xl flex items-center justify-center p-4 z-[110]">
-          <div className="bg-slate-900 rounded-[5.5rem] p-20 w-full max-w-2xl border border-slate-800 shadow-[0_0_100px_rgba(0,0,0,0.8)] relative">
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-yellow-400 rounded-[3rem] flex items-center justify-center text-slate-950 shadow-2xl border-[10px] border-slate-900">
-              <Lock size={56} strokeWidth={3}/>
+        <div className="fixed inset-0 bg-zinc-950/80 z-[110] flex items-center justify-center p-4 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-zinc-900 p-8 rounded-3xl border border-zinc-800 w-full max-w-md shadow-2xl relative animate-in slide-in-from-bottom-4 duration-200">
+            <button onClick={() => setIsConfigOpen(false)} className="absolute top-4 right-4 text-zinc-500 hover:text-white"><XCircle size={24}/></button>
+            <div className="text-center mb-8">
+                <div className="bg-zinc-800 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner"><Settings2 size={32} className="text-sky-500"/></div>
+                <h2 className="text-xl font-black text-white uppercase tracking-widest">Configuración API</h2>
             </div>
-            <h2 className="text-4xl font-black uppercase italic mb-12 text-center tracking-tighter text-white">Autorización 10k</h2>
-            <form onSubmit={saveConfig} className="space-y-12">
+            <form onSubmit={saveConfig} className="space-y-6">
               <div>
-                <label className="block text-[11px] font-black text-slate-600 uppercase tracking-[0.5em] mb-5 text-center">Llave Personal Airtable</label>
-                <input
-                  type="password"
-                  className="w-full p-8 bg-slate-950 border-2 border-slate-800 rounded-[3rem] focus:border-yellow-400 outline-none font-mono text-center text-xl text-yellow-500 shadow-inner"
-                  value={config.apiKey}
-                  onChange={(e) => setConfig({...config, apiKey: e.target.value})}
-                  required
-                  placeholder="pat..."
-                />
+                <label className="text-[10px] font-bold text-zinc-400 uppercase mb-2 block ml-1">Personal Access Token (PAT)</label>
+                <div className="relative">
+                    <Lock size={16} className="absolute top-1/2 left-4 -translate-y-1/2 text-zinc-500"/>
+                    <input type="password" className="w-full p-4 pl-12 bg-zinc-950 border-2 border-zinc-800 rounded-xl text-white focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 outline-none transition-all font-mono text-sm" value={config.apiKey} onChange={e => setConfig({...config, apiKey: e.target.value})} placeholder="pat..." required/>
+                </div>
               </div>
-              <button type="submit" className="w-full py-8 bg-yellow-400 text-slate-950 font-black rounded-[3rem] hover:bg-yellow-300 shadow-[0_20px_60px_rgba(250,204,21,0.3)] transition-all uppercase italic tracking-[0.2em] text-sm">
-                ACTIVAR TERMINAL DE SEGURIDAD
-              </button>
+              <button className="w-full py-4 bg-sky-500 hover:bg-sky-400 text-white font-black rounded-xl transition-all uppercase text-sm tracking-widest shadow-lg shadow-sky-500/20 active:scale-95">GUARDAR CREDENCIALES</button>
             </form>
           </div>
         </div>
       )}
 
       {status.message && (
-        <div className={`fixed bottom-12 right-12 px-14 py-9 rounded-[4rem] shadow-[0_40px_100px_rgba(0,0,0,0.8)] font-black flex items-center gap-7 animate-in slide-in-from-right-full z-[120] border-l-[15px] ${
-          status.type === 'success' ? 'bg-green-600 text-white border-green-400' : 'bg-red-600 text-white border-red-400'
-        }`}>
-          {status.type === 'success' ? <ShieldCheck size={48}/> : <AlertCircle size={48}/>}
-          <span className="uppercase text-lg tracking-wider">{status.message}</span>
+        <div className={`fixed bottom-6 md:bottom-8 right-4 md:right-8 px-6 py-4 rounded-2xl shadow-2xl font-bold flex items-center gap-4 z-[120] animate-in slide-in-from-right duration-300 border-l-4 backdrop-blur-md ${status.type === 'success' ? 'bg-emerald-500/90 text-white border-emerald-300' : 'bg-rose-500/90 text-white border-rose-300'}`}>
+          <div className={`p-2 rounded-full ${status.type === 'success' ? 'bg-emerald-400/30' : 'bg-rose-400/30'}`}>
+            {status.type === 'success' ? <CheckCircle2 size={20}/> : <AlertTriangle size={20}/>}
+          </div>
+          <span className="text-xs uppercase tracking-wide">{status.message}</span>
         </div>
       )}
     </div>
