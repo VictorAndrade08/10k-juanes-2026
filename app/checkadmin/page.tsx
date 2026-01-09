@@ -10,7 +10,7 @@ import {
   Scan, FileText, Loader2, Eye, Settings2, AlertTriangle, Lock, History, ShieldAlert,
   Fingerprint, Zap, Info, CreditCard, Share2, XCircle, AlertOctagon, Hash, Calendar,
   Maximize2, Database, Image as ImageIcon, User, Wallet, FileWarning, Unlock, LogOut,
-  Users, Accessibility, LayoutDashboard, ChevronRight, Check, Landmark, Tag, CheckCircle, File, ThumbsUp
+  Users, Accessibility, LayoutDashboard, ChevronRight, Check, Landmark, Tag, CheckCircle, File, ThumbsUp, Eraser
 } from 'lucide-react';
 
 // --- CONFIGURACIÓN FIREBASE (HÍBRIDA Y ROBUSTA) ---
@@ -113,6 +113,15 @@ export default function BunkerPage() {
   const [isScanningAll, setIsScanningAll] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [status, setStatus] = useState({ type: '', message: '' });
+
+  // --- UI STATE ---
+  const [searchTerm, setSearchTerm] = useState("");
+  
+  // --- MANUAL VERIFY MODAL STATE ---
+  const [verifyModalOpen, setVerifyModalOpen] = useState(false);
+  const [activeVerifyRecord, setActiveVerifyRecord] = useState<Record | null>(null);
+  const [manualDocId, setManualDocId] = useState("");
+  const [manualAmount, setManualAmount] = useState("");
 
   // --- INIT ---
   useEffect(() => {
@@ -292,10 +301,12 @@ export default function BunkerPage() {
       if (!record) {
          record = airtableRecords.find(r => {
             if (assignedIds.has(r.id)) return false;
-            const bankNameParts = normalizeText(bank.depositor).split(/\s+/).filter(p => p.length > 2);
+            // Tokenizamos banco ignorando orden, filtro > 1 caracter
+            const bankNameParts = normalizeText(bank.depositor).split(/\s+/).filter(p => p.length > 1);
             if (bankNameParts.length === 0) return false;
             
             const crmNameNorm = normalizeText(r.nombre);
+            // Revisamos cuántas partes del banco están en el string del CRM
             const matches = bankNameParts.filter(p => crmNameNorm.includes(p));
             
             if (bank.esInterbancaria) {
@@ -315,32 +326,41 @@ export default function BunkerPage() {
       let confidence = 0;
 
       if (record) {
+         // --- LOGICA BAG OF WORDS (SIN ORDEN) ---
          const crmName = normalizeText(record.nombre);
          const bankName = normalizeText(bank.depositor);
-         const crmParts = crmName.split(/\s+/).filter(p => p.length > 2);
-         const bankParts = bankName.split(/\s+/).filter(p => p.length > 2);
-         const matchingWords = crmParts.filter(part => bankParts.some(b => b === part || b.includes(part) || part.includes(b)));
-         const matchCount = matchingWords.length;
+         // Usamos Set para evitar duplicados y filtramos palabras muy cortas (1 letra)
+         const crmParts = Array.from(new Set(crmName.split(/\s+/).filter(p => p.length > 1)));
+         const bankParts = Array.from(new Set(bankName.split(/\s+/).filter(p => p.length > 1)));
+         
+         // Contamos coincidencias sin importar posición
+         let matchCount = 0;
+         crmParts.forEach(cPart => {
+             if (bankParts.some(bPart => bPart === cPart || bPart.includes(cPart) || cPart.includes(bPart))) {
+                 matchCount++;
+             }
+         });
 
          const isPhysical = record.tipoComprobante === 'FISICO';
 
          if (matchType === 'documento') {
-             // REGLA: Si documento coincide + 1 apellido = 100% MATCH
-             if (matchCount >= 1) {
+             // REGLA USUARIO: Documento coincide + al menos 2 nombres/apellidos coinciden (SIN IMPORTAR ORDEN)
+             if (matchCount >= 2) {
                  nameMismatch = false; 
                  confidence = 100;
              } 
-             // REGLA FÍSICO: Si es papel, confiamos en el número aunque el nombre no cuadre (ej: "DEPOSITO")
+             // REGLA FÍSICO: Si es papel, confiamos en el número (el control es que coincida con el papel)
              else if (isPhysical) {
                  nameMismatch = false; 
                  confidence = 100;
              }
+             // Si coincide el documento pero solo 1 nombre coincide (y no es físico) -> Mismatch para revisión manual
              else {
                  nameMismatch = true; 
-                 confidence = 20;
+                 confidence = matchCount === 1 ? 50 : 20;
              }
          } else {
-             // REGLA: Interbancaria con 1 apellido = 100% MATCH
+             // REGLA: Interbancaria con 1 apellido = 100% MATCH (se mantiene)
              if (matchCount >= 2) {
                  nameMismatch = false; 
                  confidence = 100;
@@ -411,18 +431,27 @@ export default function BunkerPage() {
     } catch (e) { console.error(e); showStatus('error', 'Error al guardar.'); } finally { setLoading(false); }
   };
 
-  // --- NUEVA FUNCION: VALIDAR MANUALMENTE DESDE SIDEBAR ---
-  const manualVerify = async (record: Record) => {
-    if (!user || !db) return;
-    if (!window.confirm(`¿Validar manualmente el pago de ${record.nombre}? Esto lo moverá a 'Inscrito'.`)) return;
+  // --- NUEVA FUNCION: PREPARAR VALIDACIÓN MANUAL ---
+  const openManualVerify = (record: Record) => {
+    setActiveVerifyRecord(record);
+    setManualDocId(record.docExtraido || "");
+    setManualAmount(record.montoExtraido?.toString() || record.valorEsperado.toString());
+    setVerifyModalOpen(true);
+  };
+
+  // --- NUEVA FUNCION: EJECUTAR VALIDACIÓN MANUAL ---
+  const executeManualVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !db || !activeVerifyRecord) return;
+    
+    // Validación básica
+    const docId = manualDocId.trim() || `MANUAL-${Date.now().toString().slice(-6)}`;
+    const monto = parseFloat(manualAmount) || activeVerifyRecord.valorEsperado;
 
     setLoading(true);
     try {
-      const docId = record.docExtraido || `MANUAL-${Date.now().toString().slice(-6)}`;
-      const monto = record.montoExtraido || record.valorEsperado;
-      
       // Update Airtable
-      await fetch(`https://api.airtable.com/v0/${config.baseId}/${encodeURIComponent(config.tableName)}/${record.id}`, {
+      await fetch(`https://api.airtable.com/v0/${config.baseId}/${encodeURIComponent(config.tableName)}/${activeVerifyRecord.id}`, {
         method: 'PATCH', 
         headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields: { 
@@ -434,7 +463,7 @@ export default function BunkerPage() {
 
       // Update Firestore
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'verified_receipts', docId), { 
-        atleta: record.nombre, 
+        atleta: activeVerifyRecord.nombre, 
         fecha: new Date().toISOString(), 
         monto: monto, 
         uid: user.uid, 
@@ -442,9 +471,11 @@ export default function BunkerPage() {
         manual: true
       });
 
-      // Remove from local list so it disappears from "Por verificar"
-      setAirtableRecords(prev => prev.filter(r => r.id !== record.id));
-      showStatus('success', 'Validado manualmente.');
+      // Remove from local list
+      setAirtableRecords(prev => prev.filter(r => r.id !== activeVerifyRecord.id));
+      showStatus('success', 'Pago validado correctamente.');
+      setVerifyModalOpen(false);
+      setActiveVerifyRecord(null);
     } catch (e) {
       console.error(e);
       showStatus('error', 'Error al validar manual.');
@@ -452,6 +483,12 @@ export default function BunkerPage() {
       setLoading(false);
     }
   };
+
+  // --- FILTRO DE BUSQUEDA ---
+  const filteredRecords = airtableRecords.filter(r => 
+    r.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    r.cedula.includes(searchTerm)
+  );
 
   if (!isMounted) return null;
   if (isLocked) return <LockScreen pin={pinInput} setPin={setPinInput} error={pinError} unlock={handleUnlock} />;
@@ -479,27 +516,36 @@ export default function BunkerPage() {
       <div className="flex-1 flex gap-0 h-full min-h-0 relative">
         
         {/* SIDEBAR OCR */}
-        <div className="w-[300px] border-r border-zinc-800 flex flex-col bg-zinc-900/30 hidden lg:flex backdrop-blur-sm">
-           <div className="p-3 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/50">
-              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2"><Users size={14}/> ATLETAS ({airtableRecords.length})</span>
-              <button onClick={scanAll} disabled={isScanningAll || airtableRecords.length === 0} className="text-[10px] px-2 py-1 rounded bg-sky-900/20 text-sky-400 border border-sky-800/30 hover:bg-sky-900/40 transition-all flex items-center gap-1 font-bold">{isScanningAll ? <Loader2 className="animate-spin" size={12}/> : <Scan size={12}/>} ESCANEAR</button>
+        <div className="w-[320px] border-r border-zinc-800 flex flex-col bg-zinc-900/30 hidden lg:flex backdrop-blur-sm">
+           <div className="p-3 border-b border-zinc-800 flex flex-col gap-3 bg-zinc-900/50">
+              <div className="flex justify-between items-center">
+                 <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2"><Users size={14}/> ATLETAS ({airtableRecords.length})</span>
+                 <button onClick={scanAll} disabled={isScanningAll || airtableRecords.length === 0} className="text-[10px] px-2 py-1 rounded bg-sky-900/20 text-sky-400 border border-sky-800/30 hover:bg-sky-900/40 transition-all flex items-center gap-1 font-bold">{isScanningAll ? <Loader2 className="animate-spin" size={12}/> : <Scan size={12}/>} ESCANEAR</button>
+              </div>
+              {/* SEARCH BAR */}
+              <div className="relative group">
+                  <div className="absolute inset-y-0 left-2.5 flex items-center pointer-events-none text-zinc-500"><Search size={12}/></div>
+                  <input type="text" className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-zinc-300 focus:border-sky-500/50 focus:ring-1 focus:ring-sky-500/20 outline-none transition-all placeholder:text-zinc-600 font-medium" placeholder="Buscar por nombre o cédula..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/>
+                  {searchTerm && <button onClick={() => setSearchTerm("")} className="absolute inset-y-0 right-2 flex items-center text-zinc-500 hover:text-white"><XCircle size={12}/></button>}
+              </div>
            </div>
            
            <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
-              {airtableRecords.map(r => (
+              {filteredRecords.length === 0 && airtableRecords.length > 0 && <div className="text-center p-4 text-xs text-zinc-500 font-medium">No se encontraron atletas.</div>}
+              {filteredRecords.map(r => (
                 <div key={r.id} className={`group p-2.5 rounded-lg border transition-all text-xs flex flex-col gap-1.5 relative overflow-hidden ${r.statusIA === 'listo' ? 'bg-sky-950/10 border-sky-500/30' : 'bg-zinc-900/40 border-zinc-800/60 hover:border-zinc-700'}`}>
                    {r.statusIA === 'listo' && <div className="absolute top-0 right-0 w-16 h-16 bg-sky-500/5 rounded-bl-full -mr-8 -mt-8 pointer-events-none"></div>}
                    <div className="flex justify-between items-start">
-                      <div>
-                        <span className="font-bold text-zinc-200 block text-[11px] mb-0.5">{r.nombre}</span>
+                      <div className="flex-1 min-w-0 pr-2">
+                        <span className="font-bold text-zinc-200 block text-[11px] mb-0.5 truncate" title={r.nombre}>{r.nombre}</span>
                         <span className="text-[10px] text-zinc-500 font-mono flex items-center gap-1"><Hash size={10}/> {r.cedula}</span>
                       </div>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex gap-1 shrink-0">
                         {r.fotoUrl && <button onClick={() => setSelectedImage(r.fotoUrl)} className="p-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white" title="Ver comprobante"><Eye size={12}/></button>}
                         <button onClick={() => scanReceiptIA(r)} disabled={scanningId === r.id} className="p-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-sky-400" title="Escanear con IA">{scanningId === r.id ? <Loader2 size={12} className="animate-spin"/> : <Scan size={12}/>}</button>
                         
-                        {/* --- BOTON NUEVO: ACEPTAR PAGO MANUALMENTE --- */}
-                        <button onClick={() => manualVerify(r)} className="p-1.5 rounded bg-zinc-800 hover:bg-emerald-600 text-zinc-400 hover:text-white transition-colors border border-transparent hover:border-emerald-500/50" title="Aceptar Pago Manualmente">
+                        {/* --- BOTON NUEVO: ACEPTAR PAGO MANUALMENTE (ABRE MODAL) --- */}
+                        <button onClick={() => openManualVerify(r)} className="p-1.5 rounded bg-zinc-800 hover:bg-emerald-600 text-zinc-400 hover:text-white transition-colors border border-transparent hover:border-emerald-500/50 group-hover:bg-zinc-800" title="Validación Manual">
                             <Check size={12}/>
                         </button>
                         {/* --------------------------------------------- */}
@@ -526,7 +572,8 @@ export default function BunkerPage() {
            <div className="p-4 border-b border-zinc-800 bg-zinc-900/20 flex gap-4 h-24 items-center shrink-0 z-10">
               <div className="flex-1 h-full relative group">
                   <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-zinc-600"><FileText size={16}/></div>
-                  <textarea className="w-full h-full bg-zinc-950 border border-zinc-800 rounded-xl pl-10 p-3 text-xs font-mono text-zinc-300 resize-none focus:border-sky-500/50 focus:ring-1 focus:ring-sky-900/50 outline-none leading-tight transition-all shadow-inner" placeholder="Pega aquí el reporte del banco..." value={bankData} onChange={(e) => setBankData(e.target.value)}/>
+                  <textarea className="w-full h-full bg-zinc-950 border border-zinc-800 rounded-xl pl-10 pr-10 p-3 text-xs font-mono text-zinc-300 resize-none focus:border-sky-500/50 focus:ring-1 focus:ring-sky-900/50 outline-none leading-tight transition-all shadow-inner" placeholder="Pega aquí el reporte del banco..." value={bankData} onChange={(e) => setBankData(e.target.value)}/>
+                  {bankData && <button onClick={() => setBankData("")} className="absolute top-3 right-3 text-zinc-600 hover:text-white bg-zinc-900 hover:bg-rose-500/20 rounded p-1 transition-all"><Eraser size={14}/></button>}
               </div>
               <button onClick={processMatches} className="h-full px-8 bg-gradient-to-br from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-black text-xs rounded-xl uppercase tracking-wider flex flex-col justify-center items-center gap-1 shadow-xl shadow-indigo-900/20 active:scale-95 transition-all border border-sky-500/20"><ArrowRight size={18}/> <span className="text-[10px] opacity-80">EJECUTAR</span></button>
            </div>
@@ -648,6 +695,43 @@ export default function BunkerPage() {
 
         {selectedImage && <div className="fixed inset-0 z-[99999] bg-zinc-950/95 flex flex-col items-center justify-center p-8 backdrop-blur-md cursor-zoom-out" onClick={() => setSelectedImage(null)}><img src={selectedImage} className="max-w-full max-h-full rounded-lg border border-zinc-700 shadow-2xl"/></div>}
         
+        {/* --- MODAL DE VERIFICACIÓN MANUAL --- */}
+        {verifyModalOpen && activeVerifyRecord && (
+            <div className="fixed inset-0 z-[99999] bg-zinc-950/80 flex items-center justify-center p-4 backdrop-blur-md">
+                <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800 w-full max-w-sm shadow-2xl relative">
+                    <button onClick={() => setVerifyModalOpen(false)} className="absolute top-4 right-4 text-zinc-500 hover:text-white"><XCircle size={20}/></button>
+                    
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="p-3 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"><CheckCircle2 size={24}/></div>
+                        <div>
+                            <h2 className="text-sm font-black text-white uppercase tracking-wider">Validación Manual</h2>
+                            <p className="text-[10px] text-zinc-400 font-medium">Confirma los datos del pago.</p>
+                        </div>
+                    </div>
+
+                    <div className="mb-4 bg-zinc-950/50 p-3 rounded-lg border border-zinc-800/50">
+                        <span className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">ATLETA</span>
+                        <span className="block text-sm font-bold text-white">{activeVerifyRecord.nombre}</span>
+                        <span className="block text-[10px] text-zinc-500 font-mono mt-0.5">{activeVerifyRecord.cedula}</span>
+                    </div>
+
+                    <form onSubmit={executeManualVerify} className="space-y-4">
+                        <div>
+                            <label className="text-[10px] text-zinc-500 font-bold uppercase mb-1.5 block">Nro. Documento / Referencia</label>
+                            <input type="text" className="w-full p-3 bg-zinc-950 border border-zinc-800 rounded-lg text-white focus:border-emerald-500 outline-none text-sm font-mono placeholder:text-zinc-700" value={manualDocId} onChange={e => setManualDocId(e.target.value)} placeholder="Ej: 123456" autoFocus/>
+                        </div>
+                        <div>
+                            <label className="text-[10px] text-zinc-500 font-bold uppercase mb-1.5 block">Monto ($)</label>
+                            <input type="number" step="0.01" className="w-full p-3 bg-zinc-950 border border-zinc-800 rounded-lg text-white focus:border-emerald-500 outline-none text-sm font-mono placeholder:text-zinc-700" value={manualAmount} onChange={e => setManualAmount(e.target.value)} placeholder="0.00"/>
+                        </div>
+                        <button className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-lg uppercase tracking-widest text-xs transition-all shadow-lg shadow-emerald-900/20 active:scale-95 flex items-center justify-center gap-2">
+                            <Check size={16}/> CONFIRMAR PAGO
+                        </button>
+                    </form>
+                </div>
+            </div>
+        )}
+
       </div> {/* Closing Main Flex Container */}
       
       {isConfigOpen && <ConfigModal config={config} setConfig={setConfig} save={saveConfig} close={() => setIsConfigOpen(false)} />}
