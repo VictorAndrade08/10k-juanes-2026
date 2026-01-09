@@ -411,6 +411,48 @@ export default function BunkerPage() {
     } catch (e) { console.error(e); showStatus('error', 'Error al guardar.'); } finally { setLoading(false); }
   };
 
+  // --- NUEVA FUNCION: VALIDAR MANUALMENTE DESDE SIDEBAR ---
+  const manualVerify = async (record: Record) => {
+    if (!user || !db) return;
+    if (!window.confirm(`¿Validar manualmente el pago de ${record.nombre}? Esto lo moverá a 'Inscrito'.`)) return;
+
+    setLoading(true);
+    try {
+      const docId = record.docExtraido || `MANUAL-${Date.now().toString().slice(-6)}`;
+      const monto = record.montoExtraido || record.valorEsperado;
+      
+      // Update Airtable
+      await fetch(`https://api.airtable.com/v0/${config.baseId}/${encodeURIComponent(config.tableName)}/${record.id}`, {
+        method: 'PATCH', 
+        headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { 
+            'Etapa': 'Inscrito', 
+            'Numero Comprobante': docId, 
+            'Comentarios': `✅ VALIDADO MANUAL [${new Date().toLocaleDateString()}] - $${monto} - Ref: ${docId}` 
+        } })
+      });
+
+      // Update Firestore
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'verified_receipts', docId), { 
+        atleta: record.nombre, 
+        fecha: new Date().toISOString(), 
+        monto: monto, 
+        uid: user.uid, 
+        isGroup: false,
+        manual: true
+      });
+
+      // Remove from local list so it disappears from "Por verificar"
+      setAirtableRecords(prev => prev.filter(r => r.id !== record.id));
+      showStatus('success', 'Validado manualmente.');
+    } catch (e) {
+      console.error(e);
+      showStatus('error', 'Error al validar manual.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (!isMounted) return null;
   if (isLocked) return <LockScreen pin={pinInput} setPin={setPinInput} error={pinError} unlock={handleUnlock} />;
 
@@ -453,8 +495,15 @@ export default function BunkerPage() {
                         <span className="text-[10px] text-zinc-500 font-mono flex items-center gap-1"><Hash size={10}/> {r.cedula}</span>
                       </div>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {r.fotoUrl && <button onClick={() => setSelectedImage(r.fotoUrl)} className="p-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white"><Eye size={12}/></button>}
-                        <button onClick={() => scanReceiptIA(r)} disabled={scanningId === r.id} className="p-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-sky-400">{scanningId === r.id ? <Loader2 size={12} className="animate-spin"/> : <Scan size={12}/>}</button>
+                        {r.fotoUrl && <button onClick={() => setSelectedImage(r.fotoUrl)} className="p-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white" title="Ver comprobante"><Eye size={12}/></button>}
+                        <button onClick={() => scanReceiptIA(r)} disabled={scanningId === r.id} className="p-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-sky-400" title="Escanear con IA">{scanningId === r.id ? <Loader2 size={12} className="animate-spin"/> : <Scan size={12}/>}</button>
+                        
+                        {/* --- BOTON NUEVO: ACEPTAR PAGO MANUALMENTE --- */}
+                        <button onClick={() => manualVerify(r)} className="p-1.5 rounded bg-zinc-800 hover:bg-emerald-600 text-zinc-400 hover:text-white transition-colors border border-transparent hover:border-emerald-500/50" title="Aceptar Pago Manualmente">
+                            <Check size={12}/>
+                        </button>
+                        {/* --------------------------------------------- */}
+
                       </div>
                    </div>
                    {r.docExtraido && (
@@ -596,9 +645,10 @@ export default function BunkerPage() {
               ))}
            </div>
         </div>
-      </div>
 
-      {selectedImage && <div className="fixed inset-0 z-[99999] bg-zinc-950/95 flex flex-col items-center justify-center p-8 backdrop-blur-md cursor-zoom-out" onClick={() => setSelectedImage(null)}><img src={selectedImage} className="max-w-full max-h-full rounded-lg border border-zinc-700 shadow-2xl"/></div>}
+        {selectedImage && <div className="fixed inset-0 z-[99999] bg-zinc-950/95 flex flex-col items-center justify-center p-8 backdrop-blur-md cursor-zoom-out" onClick={() => setSelectedImage(null)}><img src={selectedImage} className="max-w-full max-h-full rounded-lg border border-zinc-700 shadow-2xl"/></div>}
+        
+      </div> {/* Closing Main Flex Container */}
       
       {isConfigOpen && <ConfigModal config={config} setConfig={setConfig} save={saveConfig} close={() => setIsConfigOpen(false)} />}
       {status.message && <div className={`fixed bottom-6 right-6 px-5 py-3 rounded-lg shadow-2xl font-bold flex items-center gap-3 z-[99999] border text-xs animate-in slide-in-from-bottom-5 ${status.type === 'success' ? 'bg-zinc-900 text-emerald-400 border-emerald-500/50' : 'bg-zinc-900 text-rose-400 border-rose-500/50'}`}>{status.type === 'success' ? <CheckCircle2 size={16}/> : <AlertTriangle size={16}/>}<span>{status.message}</span></div>}
