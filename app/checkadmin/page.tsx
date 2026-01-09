@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getAuth, onAuthStateChanged, signInAnonymously, Auth, User as FirebaseUser } from 'firebase/auth';
+import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken, Auth, User as FirebaseUser } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, onSnapshot, getDoc, Firestore } from 'firebase/firestore';
 
 import {
@@ -10,52 +10,54 @@ import {
   Scan, FileText, Loader2, Eye, Settings2, AlertTriangle, Lock, History, ShieldAlert,
   Fingerprint, Zap, Info, CreditCard, Share2, XCircle, AlertOctagon, Hash, Calendar,
   Maximize2, Database, Image as ImageIcon, User, Wallet, FileWarning, Unlock, LogOut,
-  Users, Accessibility, LayoutDashboard, ChevronRight, Check, Landmark, Tag
+  Users, Accessibility, LayoutDashboard, ChevronRight, Check, Landmark, Tag, CheckCircle
 } from 'lucide-react';
 
-// --- CONFIGURACIÓN DE ENTORNO ---
-const getEnv = (key: string) => {
-  // @ts-ignore
-  if (typeof process !== 'undefined' && process.env) {
-    // @ts-ignore
-    return process.env[key];
-  }
-  return "";
-};
+// --- CONFIGURACIÓN FIREBASE (HÍBRIDA Y ROBUSTA) ---
+// Prioriza la configuración inyectada por Canvas para asegurar que funcione aquí.
+// Si no existe (entorno local Next.js), usa variables de entorno estándar.
 
-const firebaseConfig = {
-  apiKey: typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_FIREBASE_API_KEY : "",
-  authDomain: typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN : "",
-  projectId: typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID : "",
-  storageBucket: typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET : "",
-  messagingSenderId: typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID : "",
-  appId: typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_FIREBASE_APP_ID : "",
-};
+let app: FirebaseApp | undefined;
+let auth: Auth | undefined;
+let db: Firestore | undefined;
+// @ts-ignore
+let appId = typeof __app_id !== 'undefined' ? __app_id : 'bunker-anti-fraude-10k';
+
+try {
+  let config = null;
+  
+  // 1. Intento cargar configuración de Canvas
+  // @ts-ignore
+  if (typeof __firebase_config !== 'undefined') {
+    // @ts-ignore
+    config = JSON.parse(__firebase_config);
+  } 
+  // 2. Fallback a entorno local (Next.js)
+  else if (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+    config = {
+      apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+      authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+      storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+      messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+      appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+    };
+  }
+
+  if (config) {
+    app = getApps().length === 0 ? initializeApp(config) : getApp();
+    auth = getAuth(app);
+    db = getFirestore(app);
+  }
+} catch (error) {
+  console.error("🔥 Error Inicializando Firebase:", error);
+}
 
 const GEMINI_KEY = typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_GEMINI_API_KEY || "") : "";
-
 const AIRTABLE_CONFIG_KEY = 'verificador_ruta_3_juanes_config';
 const ACCESS_PIN = "1026"; 
 const PRICE_FULL = 30.00;
 const PRICE_DISCOUNT = 20.00;
-const APP_ARTIFACT_ID = "bunker-anti-fraude-10k"; 
-
-// --- VARIABLES GLOBALES ---
-let app: FirebaseApp | undefined;
-let auth: Auth | undefined;
-let db: Firestore | undefined;
-
-if (typeof window !== "undefined") {
-  try {
-    if (firebaseConfig.apiKey) {
-      app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-      auth = getAuth(app);
-      db = getFirestore(app);
-    } else if (typeof process !== 'undefined') {
-        console.warn("⚠️ Falta configuración Firebase");
-    }
-  } catch (error) { console.error("🔥 Error Firebase:", error); }
-}
 
 // --- TIPOS ---
 interface Record {
@@ -125,27 +127,41 @@ export default function BunkerPage() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        setConfig(prev => ({ ...prev, ...parsed, apiKey: parsed.apiKey || (typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_AIRTABLE_API_KEY : '') || '' }));
+        setConfig(prev => ({ ...prev, ...parsed, apiKey: parsed.apiKey || config.apiKey }));
       } catch (e) {}
     }
   }, []);
 
+  // 1. Capa de Seguridad: Autenticación Obligatoria (Tu código exacto restaurado)
   useEffect(() => {
-    if (!isMounted || !auth) return;
-    const initAuth = async () => { try { await signInAnonymously(auth!); } catch (err) { console.error(err); } };
-    const unsubscribe = onAuthStateChanged(auth, setUser);
+    if (!auth) return;
+    const initAuth = async () => {
+      try {
+        // @ts-ignore
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          // @ts-ignore
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (err) {
+        console.error("Auth Error:", err);
+      }
+    };
     initAuth();
+    const unsubscribe = onAuthStateChanged(auth, setUser);
     return () => unsubscribe();
   }, [isMounted]);
 
+  // 2. Capa de Seguridad: Auditoría en Tiempo Real (Firestore)
   useEffect(() => {
     if (!user || !db) return;
-    const q = collection(db, 'artifacts', APP_ARTIFACT_ID, 'public', 'data', 'verified_receipts');
+    const q = collection(db, 'artifacts', appId, 'public', 'data', 'verified_receipts');
     return onSnapshot(q, (snap) => {
       const docs: any = {};
       snap.forEach(d => { docs[d.id] = d.data(); });
       setHistoricalDocs(docs);
-    });
+    }, (error) => console.error("Error Seguridad Firestore:", error));
   }, [user]);
 
   // --- HELPERS ---
@@ -273,7 +289,7 @@ export default function BunkerPage() {
             const crmNameNorm = normalizeText(r.nombre);
             const matches = bankNameParts.filter(p => crmNameNorm.includes(p));
             
-            // Si es interbancaria, 1 sola palabra basta. Si no, 2.
+            // Si es interbancaria, 1 sola palabra basta para considerarlo candidato.
             if (bank.esInterbancaria) {
                 return matches.length >= 1; 
             } else {
@@ -299,7 +315,7 @@ export default function BunkerPage() {
          const matchCount = matchingWords.length;
 
          if (matchType === 'documento') {
-             // REGLA: Si el documento coincide y hay AL MENOS 1 palabra igual (apellido o nombre), es 100% la persona
+             // REGLA MAESTRA (TU PEDIDO): Si el documento coincide y hay AL MENOS 1 palabra igual (1 apellido), es 100% la persona
              if (matchCount >= 1) {
                  nameMismatch = false; 
                  confidence = 100;
@@ -313,7 +329,7 @@ export default function BunkerPage() {
                  nameMismatch = false; 
                  confidence = 100;
              } else if (matchCount === 1 && bank.esInterbancaria) {
-                 nameMismatch = false; 
+                 nameMismatch = false; // Aceptamos 1 palabra si es interbancaria como Match válido
                  confidence = 100;
              } else {
                  nameMismatch = true; 
@@ -355,7 +371,7 @@ export default function BunkerPage() {
       const { id, nombre } = match.record;
       const { documento, monto } = match.bank;
       
-      const docRef = doc(db, 'artifacts', APP_ARTIFACT_ID, 'public', 'data', 'verified_receipts', documento);
+      const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'verified_receipts', documento);
       const docSnap = await getDoc(docRef);
       if (docSnap.exists() && !match.isGroupPayment) { showStatus('error', 'FRAUDE: Doc usado.'); setLoading(false); return; }
 
@@ -365,7 +381,7 @@ export default function BunkerPage() {
       });
 
       const firestoreId = match.isGroupPayment ? `${documento}_${id}` : documento;
-      await setDoc(doc(db, 'artifacts', APP_ARTIFACT_ID, 'public', 'data', 'verified_receipts', firestoreId), { atleta: nombre, fecha: new Date().toISOString(), monto, uid: user.uid, isGroup: match.isGroupPayment });
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'verified_receipts', firestoreId), { atleta: nombre, fecha: new Date().toISOString(), monto, uid: user.uid, isGroup: match.isGroupPayment });
       
       setMatches(prev => prev.map(m => m.record?.id === id ? { ...m, status: 'verified' as const } : m));
       showStatus('success', 'Validado.');
