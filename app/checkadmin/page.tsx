@@ -10,13 +10,10 @@ import {
   Scan, FileText, Loader2, Eye, Settings2, AlertTriangle, Lock, History, ShieldAlert,
   Fingerprint, Zap, Info, CreditCard, Share2, XCircle, AlertOctagon, Hash, Calendar,
   Maximize2, Database, Image as ImageIcon, User, Wallet, FileWarning, Unlock, LogOut,
-  Users, Accessibility, LayoutDashboard, ChevronRight, Check, Landmark, Tag, CheckCircle
+  Users, Accessibility, LayoutDashboard, ChevronRight, Check, Landmark, Tag, CheckCircle, File, ThumbsUp
 } from 'lucide-react';
 
 // --- CONFIGURACIÓN FIREBASE (HÍBRIDA Y ROBUSTA) ---
-// Prioriza la configuración inyectada por Canvas para asegurar que funcione aquí.
-// Si no existe (entorno local Next.js), usa variables de entorno estándar.
-
 let app: FirebaseApp | undefined;
 let auth: Auth | undefined;
 let db: Firestore | undefined;
@@ -25,15 +22,11 @@ let appId = typeof __app_id !== 'undefined' ? __app_id : 'bunker-anti-fraude-10k
 
 try {
   let config = null;
-  
-  // 1. Intento cargar configuración de Canvas
   // @ts-ignore
   if (typeof __firebase_config !== 'undefined') {
     // @ts-ignore
     config = JSON.parse(__firebase_config);
-  } 
-  // 2. Fallback a entorno local (Next.js)
-  else if (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+  } else if (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
     config = {
       apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
       authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -72,6 +65,7 @@ interface Record {
   fotoUrl: string | null;
   docExtraido: string | null;
   montoExtraido: number | null;
+  tipoComprobante: string | null; // Nuevo campo para tipo (FISICO/DIGITAL)
   statusIA: 'pendiente' | 'escaneando' | 'listo' | 'error';
 }
 
@@ -132,7 +126,6 @@ export default function BunkerPage() {
     }
   }, []);
 
-  // 1. Capa de Seguridad: Autenticación Obligatoria (Tu código exacto restaurado)
   useEffect(() => {
     if (!auth) return;
     const initAuth = async () => {
@@ -153,7 +146,6 @@ export default function BunkerPage() {
     return () => unsubscribe();
   }, [isMounted]);
 
-  // 2. Capa de Seguridad: Auditoría en Tiempo Real (Firestore)
   useEffect(() => {
     if (!user || !db) return;
     const q = collection(db, 'artifacts', appId, 'public', 'data', 'verified_receipts');
@@ -209,7 +201,10 @@ export default function BunkerPage() {
           esTerceraEdad: (r.fields['edad'] || 0) >= 65,
           valorEsperado: (r.fields['Discapacidad'] === true || (r.fields['edad'] || 0) >= 65) ? PRICE_DISCOUNT : PRICE_FULL,
           fotoUrl: r.fields['Comprobante']?.[0]?.url || null,
-          docExtraido: null, montoExtraido: null, statusIA: 'pendiente'
+          docExtraido: null, 
+          montoExtraido: null,
+          tipoComprobante: null,
+          statusIA: 'pendiente'
         })));
         showStatus('success', `${data.records.length} atletas cargados.`);
       }
@@ -227,15 +222,29 @@ export default function BunkerPage() {
     try {
       const imageData = await urlToBase64(record.fotoUrl);
       if (!imageData) throw new Error("CORS");
+      
+      const prompt = `Analiza este comprobante.
+      1. Extrae el NÚMERO DE DOCUMENTO (secuencial, referencia).
+      2. Extrae el MONTO.
+      3. Detecta si es "FISICO" (foto de papel, papeleta ventanilla, manuscrito) o "DIGITAL" (captura web/app).
+      Responde estrictamente con este JSON: {"documento": "123456", "monto": 30.00, "tipo": "FISICO"}`;
+
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_KEY}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: `Analiza este comprobante bancario. Extrae NÚMERO DOCUMENTO (o referencia) y MONTO. Responde estrictamente con este JSON: {"documento": "123456", "monto": 30.00}` }, { inlineData: { mimeType: imageData.mimeType, data: imageData.data } }] }] })
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: imageData.mimeType, data: imageData.data } }] }] })
       });
       const result = await response.json();
       const text = result.candidates?.[0]?.content?.parts?.[0]?.text.replace(/```json/g, '').replace(/```/g, '').trim();
       const json = JSON.parse(text || "{}");
       const docId = json.documento ? String(json.documento).replace(/\D/g, '') : null;
-      setAirtableRecords(prev => prev.map(r => r.id === record.id ? { ...r, docExtraido: docId, montoExtraido: json.monto, statusIA: docId ? 'listo' : 'error' } : r));
+      
+      setAirtableRecords(prev => prev.map(r => r.id === record.id ? { 
+          ...r, 
+          docExtraido: docId, 
+          montoExtraido: json.monto, 
+          tipoComprobante: json.tipo || 'DIGITAL', // Guardamos el tipo
+          statusIA: docId ? 'listo' : 'error' 
+      } : r));
     } catch (e) { setAirtableRecords(prev => prev.map(r => r.id === record.id ? { ...r, statusIA: 'error' } : r)); } finally { setScanningId(null); }
   };
 
@@ -266,7 +275,8 @@ export default function BunkerPage() {
       const amountMatch = fullLine.match(/(\d{1,4}[.,]\d{2})(?!\d)/);
       let monto = 0; if (amountMatch) monto = parseFloat(amountMatch[0].replace(',', '.'));
 
-      const esInterbancaria = /INTERB|SPI|OTROS BANCOS|TRANSF\./i.test(fullLine);
+      // Detección mejorada de Interbancarias
+      const esInterbancaria = /INTERB|SPI|OTROS BANCOS|TRANSF\.|BCE|EN LINEA|ONLINE|TRANSFERENCIA/i.test(fullLine);
 
       if (monto > 0) bankEntries.push({ documento: docNum, monto, depositor, esInterbancaria, esDuplicadoBanco: false });
     }
@@ -274,22 +284,20 @@ export default function BunkerPage() {
     const assignedIds = new Set();
     
     const newMatches = bankEntries.map(bank => {
-      // 1. MATCH DOCUMENTO (Prioridad Máxima)
+      // 1. MATCH DOCUMENTO
       let record = airtableRecords.find(r => r.docExtraido === bank.documento);
       let matchType: 'documento' | 'nombre' = 'documento';
 
-      // 2. MATCH NOMBRE (Fallback, especialmente para Interbancarias)
+      // 2. MATCH NOMBRE
       if (!record) {
-         // Si es interbancaria, buscamos con más flexibilidad
          record = airtableRecords.find(r => {
             if (assignedIds.has(r.id)) return false;
-            const bankNameParts = normalizeText(bank.depositor).split(/\s+/).filter(p => p.length > 3);
+            const bankNameParts = normalizeText(bank.depositor).split(/\s+/).filter(p => p.length > 2);
             if (bankNameParts.length === 0) return false;
             
             const crmNameNorm = normalizeText(r.nombre);
             const matches = bankNameParts.filter(p => crmNameNorm.includes(p));
             
-            // Si es interbancaria, 1 sola palabra basta para considerarlo candidato.
             if (bank.esInterbancaria) {
                 return matches.length >= 1; 
             } else {
@@ -314,22 +322,30 @@ export default function BunkerPage() {
          const matchingWords = crmParts.filter(part => bankParts.some(b => b === part || b.includes(part) || part.includes(b)));
          const matchCount = matchingWords.length;
 
+         const isPhysical = record.tipoComprobante === 'FISICO';
+
          if (matchType === 'documento') {
-             // REGLA MAESTRA (TU PEDIDO): Si el documento coincide y hay AL MENOS 1 palabra igual (1 apellido), es 100% la persona
+             // REGLA: Si documento coincide + 1 apellido = 100% MATCH
              if (matchCount >= 1) {
                  nameMismatch = false; 
                  confidence = 100;
-             } else {
+             } 
+             // REGLA FÍSICO: Si es papel, confiamos en el número aunque el nombre no cuadre (ej: "DEPOSITO")
+             else if (isPhysical) {
+                 nameMismatch = false; 
+                 confidence = 100;
+             }
+             else {
                  nameMismatch = true; 
                  confidence = 20;
              }
          } else {
-             // LOGICA INTERBANCARIA / SIN DOC
+             // REGLA: Interbancaria con 1 apellido = 100% MATCH
              if (matchCount >= 2) {
                  nameMismatch = false; 
                  confidence = 100;
              } else if (matchCount === 1 && bank.esInterbancaria) {
-                 nameMismatch = false; // Aceptamos 1 palabra si es interbancaria como Match válido
+                 nameMismatch = false; 
                  confidence = 100;
              } else {
                  nameMismatch = true; 
@@ -375,9 +391,16 @@ export default function BunkerPage() {
       const docSnap = await getDoc(docRef);
       if (docSnap.exists() && !match.isGroupPayment) { showStatus('error', 'FRAUDE: Doc usado.'); setLoading(false); return; }
 
+      // LABEL AUTOMÁTICO
+      const tipoLabel = match.record.tipoComprobante === 'FISICO' ? '(PAPEL FÍSICO)' : '';
+
       await fetch(`https://api.airtable.com/v0/${config.baseId}/${encodeURIComponent(config.tableName)}/${id}`, {
         method: 'PATCH', headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fields: { 'Etapa': 'Inscrito', 'Numero Comprobante': documento, 'Comentarios': `✅ OK [${new Date().toLocaleDateString()}] $${monto}` } })
+        body: JSON.stringify({ fields: { 
+            'Etapa': 'Inscrito', 
+            'Numero Comprobante': documento, 
+            'Comentarios': `✅ VALIDADO [${new Date().toLocaleDateString()}] ${tipoLabel} - ${match.isGroupPayment ? 'GRUPO' : 'INDIV'}: Doc ${documento} | $${monto}` 
+        } })
       });
 
       const firestoreId = match.isGroupPayment ? `${documento}_${id}` : documento;
@@ -437,7 +460,10 @@ export default function BunkerPage() {
                    {r.docExtraido && (
                        <div className="mt-1 pt-1 border-t border-zinc-800/50 flex justify-between items-center">
                           <span className="text-[9px] text-zinc-500 uppercase font-bold">DETECTADO</span>
-                          <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950/30 px-1.5 rounded">{r.docExtraido}</span>
+                          <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950/30 px-1.5 rounded flex items-center gap-1">
+                              {r.tipoComprobante === 'FISICO' && <File size={10} className="text-amber-400"/>}
+                              {r.docExtraido}
+                          </span>
                        </div>
                    )}
                 </div>
@@ -518,7 +544,8 @@ export default function BunkerPage() {
                                </div>
                                <div className="flex items-center justify-end gap-2">
                                    <span className="text-[9px] font-bold text-sky-600 uppercase">DOC. OCR:</span>
-                                   <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${m.record.docExtraido ? 'bg-sky-900/20 text-sky-300' : 'text-zinc-600'}`}>
+                                   <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded flex items-center gap-1 ${m.record.docExtraido ? 'bg-sky-900/20 text-sky-300' : 'text-zinc-600'}`}>
+                                       {m.record.tipoComprobante === 'FISICO' && <File size={10} className="text-amber-400"/>}
                                        {m.record.docExtraido || 'NO ESCANEADO'}
                                    </span>
                                </div>
@@ -531,6 +558,7 @@ export default function BunkerPage() {
                               {m.isGroupPayment && <Badge type="purple">PAGO GRUPAL (~{m.estimatedPeople})</Badge>}
                               {!m.nameMismatch && m.matchType === 'documento' && <Badge type="success">DOC + APELLIDOS OK</Badge>}
                               {m.bank.esInterbancaria && <Badge type="warning">INTERBANCARIA</Badge>}
+                              {m.record.tipoComprobante === 'FISICO' && <Badge type="info">PAPEL FISICO</Badge>}
                            </div>
                         </>
                      ) : (
@@ -556,10 +584,10 @@ export default function BunkerPage() {
                             <CheckCircle2 size={24}/>
                             <span className="text-[9px] font-bold">LISTO</span>
                         </div>
-                     ) : m.record && (m.status !== 'fraud' || m.isGroupPayment) && !m.bank.esDuplicadoBanco && m.paymentStatus !== 'underpaid' ? (
-                        <button onClick={() => confirmInCRM(m)} className={`w-full h-full rounded-lg text-[10px] font-black uppercase transition-all flex flex-col items-center justify-center leading-tight gap-1 shadow-lg active:scale-95 group-hover:scale-105 ${m.isGroupPayment ? 'bg-violet-600 hover:bg-violet-500 text-white shadow-violet-900/20' : m.nameMismatch ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-amber-900/20' : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/20'}`}>
-                           {m.isGroupPayment ? <Users size={16}/> : m.nameMismatch ? <AlertTriangle size={16}/> : <ShieldCheck size={16}/>}
-                           <span>{m.isGroupPayment ? 'GRUPO' : m.nameMismatch ? 'FORZAR' : 'VALIDAR'}</span>
+                     ) : m.record ? (
+                        <button onClick={() => confirmInCRM(m)} className={`w-full h-full rounded-lg text-[10px] font-black uppercase transition-all flex flex-col items-center justify-center leading-tight gap-1 shadow-lg active:scale-95 group-hover:scale-105 ${m.nameMismatch || m.paymentStatus === 'underpaid' ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-amber-900/20' : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/20'}`}>
+                           <Check size={20} strokeWidth={3}/>
+                           <span>{m.nameMismatch || m.paymentStatus === 'underpaid' ? 'FORZAR' : 'OK'}</span>
                         </button>
                      ) : <div className="text-[9px] font-bold text-zinc-600 text-center flex flex-col items-center gap-1 opacity-50"><XCircle size={14}/> <span>MANUAL</span></div>}
                   </div>
