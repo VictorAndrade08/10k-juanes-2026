@@ -175,7 +175,8 @@ export default function BunkerPage() {
   const showStatus = (type: 'success' | 'error', message: string) => { setStatus({ type, message }); setTimeout(() => setStatus({ type: '', message: '' }), 4000); };
   const saveConfig = (e: React.FormEvent) => { e.preventDefault(); localStorage.setItem(AIRTABLE_CONFIG_KEY, JSON.stringify(config)); setIsConfigOpen(false); showStatus('success', 'Configuración guardada.'); };
   
-  const normalizeText = (text: string) => text.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9\s]/g, "").trim();
+  // Normalización mejorada: reemplaza símbolos por espacios para evitar uniones accidentales
+  const normalizeText = (text: string) => text.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9]/g, " ").replace(/\s+/g, " ").trim();
 
   // --- LOGICA DE PROCESAMIENTO ---
   const urlToBase64 = async (url: string) => {
@@ -306,13 +307,25 @@ export default function BunkerPage() {
             if (bankNameParts.length === 0) return false;
             
             const crmNameNorm = normalizeText(r.nombre);
-            // Revisamos cuántas partes del banco están en el string del CRM
-            const matches = bankNameParts.filter(p => crmNameNorm.includes(p));
+            // Dividimos el nombre CRM en partes para comparar palabra por palabra
+            const crmNameParts = crmNameNorm.split(/\s+/).filter(p => p.length > 1);
+
+            // Contamos coincidencias de palabras exactas (o contenidas)
+            // Esto asegura que "LOPEZ PEREZ" coincida con "PEREZ LOPEZ"
+            let wordMatchCount = 0;
+            bankNameParts.forEach(bPart => {
+                if (crmNameParts.some(cPart => cPart === bPart || cPart.includes(bPart) || bPart.includes(cPart))) {
+                    wordMatchCount++;
+                }
+            });
             
+            // Criterio de Búsqueda:
+            // Interbancaria: al menos 1 palabra coincide.
+            // Otros: Al menos 2 palabras, o 1 palabra si el nombre del banco es muy corto (<= 2 palabras).
             if (bank.esInterbancaria) {
-                return matches.length >= 1; 
+                return wordMatchCount >= 1; 
             } else {
-                return matches.length >= 2 || (matches.length >= 1 && bankNameParts.length <= 2);
+                return wordMatchCount >= 2 || (wordMatchCount >= 1 && bankNameParts.length <= 2);
             }
          });
          if (record) matchType = 'nombre';
@@ -329,13 +342,16 @@ export default function BunkerPage() {
          // --- LOGICA BAG OF WORDS (SIN ORDEN) ---
          const crmName = normalizeText(record.nombre);
          const bankName = normalizeText(bank.depositor);
+         
          // Usamos Set para evitar duplicados y filtramos palabras muy cortas (1 letra)
+         // Usamos la misma lógica de separación estricta para asegurar consistencia
          const crmParts = Array.from(new Set(crmName.split(/\s+/).filter(p => p.length > 1)));
          const bankParts = Array.from(new Set(bankName.split(/\s+/).filter(p => p.length > 1)));
          
          // Contamos coincidencias sin importar posición
          let matchCount = 0;
          crmParts.forEach(cPart => {
+             // Verificamos si la parte del CRM existe en alguna parte del Banco
              if (bankParts.some(bPart => bPart === cPart || bPart.includes(cPart) || cPart.includes(bPart))) {
                  matchCount++;
              }
@@ -344,23 +360,25 @@ export default function BunkerPage() {
          const isPhysical = record.tipoComprobante === 'FISICO';
 
          if (matchType === 'documento') {
-             // REGLA USUARIO: Documento coincide + al menos 2 nombres/apellidos coinciden (SIN IMPORTAR ORDEN)
-             if (matchCount >= 2) {
+             // REGLA FLEXIBLE: Si el Documento coincide, basta con que 1 sola palabra del nombre coincida (Nombre o Apellido)
+             // Esto cubre casos donde el banco pone "APELLIDO NOMBRE" y el CRM "NOMBRE APELLIDO", o si solo sale un apellido.
+             // Al tener el ID único validado, el riesgo de falso positivo con 1 nombre coincidente es casi nulo.
+             if (matchCount >= 1) {
                  nameMismatch = false; 
                  confidence = 100;
              } 
-             // REGLA FÍSICO: Si es papel, confiamos en el número (el control es que coincida con el papel)
+             // REGLA FÍSICO: Si es papel, confiamos en el número 100% (a veces no trae nombre legible o es depósito anónimo)
              else if (isPhysical) {
                  nameMismatch = false; 
                  confidence = 100;
              }
-             // Si coincide el documento pero solo 1 nombre coincide (y no es físico) -> Mismatch para revisión manual
              else {
                  nameMismatch = true; 
-                 confidence = matchCount === 1 ? 50 : 20;
+                 confidence = 20;
              }
          } else {
-             // REGLA: Interbancaria con 1 apellido = 100% MATCH (se mantiene)
+             // REGLA DE BÚSQUEDA POR NOMBRE (Sin Documento): Aquí sí somos más estrictos para evitar falsos positivos.
+             // Interbancaria: 1 apellido basta (asumiendo que el humano revisa).
              if (matchCount >= 2) {
                  nameMismatch = false; 
                  confidence = 100;
