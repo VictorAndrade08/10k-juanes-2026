@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image"; // Optimización de imágenes
-import { Bebas_Neue } from "next/font/google"; // Optimización de fuentes
+import Image from "next/image"; 
+import { Bebas_Neue } from "next/font/google"; 
 
-// Configuración de fuente
+// Cargamos la fuente. 'display: swap' es vital para que el texto aparezca rápido
 const bebas = Bebas_Neue({
   subsets: ["latin"],
   weight: "400",
-  display: "swap",
+  display: "swap", 
   variable: "--font-bebas",
 });
 
@@ -19,10 +19,11 @@ type TimeLeft = {
   seconds: number;
 };
 
-// Estado inicial en ceros para evitar diferencias entre Servidor y Cliente (Hydration Mismatch)
+// Estado inicial en ceros
 const INITIAL_TIME: TimeLeft = { days: 0, hours: 0, minutes: 0, seconds: 0 };
 
 function calculateTimeLeft(): TimeLeft {
+  // Fecha objetivo: Viernes 6 de febrero de 2026 a las 19:00 (GMT-5)
   const eventDate = new Date("2026-02-06T19:00:00-05:00").getTime();
   const now = Date.now();
   const diff = eventDate - now;
@@ -42,11 +43,10 @@ function calculateTimeLeft(): TimeLeft {
 const pad = (num: number) => num.toString().padStart(2, "0");
 
 export default function CountdownStrip() {
-  // Inicializamos con 0 para que el HTML del servidor coincida con el inicial del cliente
   const [timeLeft, setTimeLeft] = useState<TimeLeft>(INITIAL_TIME);
 
   useEffect(() => {
-    // Calcular inmediatamente al montar
+    // Calculamos inmediatamente al montar para evitar flash de ceros prolongado
     setTimeLeft(calculateTimeLeft());
 
     const timer = setInterval(() => {
@@ -64,7 +64,6 @@ export default function CountdownStrip() {
   ];
 
   return (
-    // Inyectamos la variable de fuente aquí
     <section className={`w-full px-3 py-4 flex justify-center bg-gray-50 font-sans ${bebas.variable}`}>
       <div className="
         relative w-full max-w-7xl 
@@ -76,15 +75,14 @@ export default function CountdownStrip() {
         px-6 sm:px-8 md:px-12 
         py-8 md:py-12
       ">
-        {/* Fondo decorativo sutil */}
+        {/* Fondo decorativo (CSS puro, no afecta rendimiento) */}
         <div className="pointer-events-none absolute top-0 right-0 w-[600px] h-[600px] bg-[radial-gradient(circle_at_center,rgba(192,36,133,0.08),transparent_70%)] rounded-full blur-3xl opacity-60 -translate-y-1/2 translate-x-1/4" />
 
         <div className="relative z-10">
           
-          {/* HEADER CON GRID */}
           <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_0.8fr] gap-8 lg:gap-12 items-center mb-10">
             
-            {/* Columna Texto */}
+            {/* Texto */}
             <div>
               <div className="flex items-center gap-3 mb-3">
                  <span className="h-px w-8 bg-[#C02485]"></span>
@@ -106,7 +104,7 @@ export default function CountdownStrip() {
               </p>
             </div>
 
-            {/* Columna Imagen OPTIMIZADA */}
+            {/* Imagen optimizada dentro del Client Component */}
             <div className="relative flex justify-center lg:justify-end">
               <div className="
                 relative w-full max-w-[400px] 
@@ -117,16 +115,24 @@ export default function CountdownStrip() {
                 p-4
                 transform transition-transform hover:scale-[1.02] duration-500
               ">
-                {/* CRÍTICO: Definimos width/height explícitos basados en el aspecto original (aprox 3.5:1).
-                   Next.js redimensionará la imagen de 11,000px a 400px, ahorrando MBs de datos.
-                */}
                 <Image
                   src="/imagen1.webp"
                   alt="Identidad 10K Ruta de los Tres Juanes"
+                  // Definimos dimensiones exactas del contenedor para evitar saltos (CLS)
                   width={400} 
                   height={115}
+                  
+                  // CLAVE 1: 'priority' es obligatorio aquí. 
+                  // Al ser "use client", esto inyecta un <link rel="preload"> en el head
+                  // para que el navegador baje la imagen antes de ejecutar el JS.
+                  priority={true}
+                  
+                  // CLAVE 2: 'sizes' le dice al navegador móvil: "No bajes la grande"
+                  // "(max-width: 768px) 100vw" -> En móvil ocupa todo el ancho
+                  // "400px" -> En escritorio ocupa máximo 400px
+                  sizes="(max-width: 768px) 100vw, 400px"
+                  
                   className="w-full h-auto object-contain select-none pointer-events-none drop-shadow-sm"
-                  loading="lazy"
                 />
               </div>
             </div>
@@ -149,7 +155,6 @@ export default function CountdownStrip() {
                     group
                 "
               >
-                {/* suppressHydrationWarning evita errores si hay milisegundos de diferencia entre server/client */}
                 <span 
                     className="text-[48px] sm:text-[64px] leading-[0.9] text-[#C02485] font-[family-name:var(--font-bebas)] group-hover:scale-110 transition-transform duration-300"
                     suppressHydrationWarning
