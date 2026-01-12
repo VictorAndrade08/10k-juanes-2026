@@ -19,7 +19,8 @@ import {
   Info,
   Trophy,
   HelpCircle,
-  RefreshCcw, // Icono para reiniciar
+  RefreshCcw,
+  Search, // Nuevo icono importado
 } from "lucide-react";
 
 // --- Interfaces ---
@@ -166,7 +167,7 @@ export default function InscripcionPage() {
   // Modals & Links
   const [modalState, setModalState] = useState({ isOpen: false, title: "", message: "", type: "error" as "error" | "success" | "warning" });
   const [discountModalOpen, setDiscountModalOpen] = useState(false);
-  const [whatsLink, setWhatsLink] = useState<string>("");
+  // const [whatsLink, setWhatsLink] = useState<string>(""); // Ya no es estrictamente necesario para el botón principal, pero lo dejo por si acaso.
   
   // Selección
   const [pendingCategory, setPendingCategory] = useState<Category | null>(null);
@@ -205,7 +206,7 @@ export default function InscripcionPage() {
     setSelectedPrice(0);
     setPreviewName("");
     setUploadedFileUrl("");
-    setWhatsLink("");
+    // setWhatsLink("");
     setAcceptTerms(false);
     setErrors({});
     
@@ -398,16 +399,8 @@ export default function InscripcionPage() {
       if (json?.file_url) setUploadedFileUrl(String(json.file_url));
       setStep(4);
 
-      const msg = `
-📢 *Inscripción 10K Ruta de los Tres Juanes 2026*
-👤 ${formData.nombres} ${formData.apellidos}
-• Cédula: ${formData.cedula}
-• Categoría: ${selectedCategory}
-• Valor: $${selectedPrice}
-🧾 Comprobante: ${json.file_url}
-✅ Inscripción registrada. Solicito verificación.`;
-
-      setWhatsLink(`https://wa.me/593995102378?text=${encodeURIComponent(msg)}`);
+      // const msg = `...`; // Ya no generamos el link de WhatsApp automáticamente para el usuario aquí
+      // setWhatsLink(`...`); 
 
     } catch (err) {
       setLoading(false);
@@ -729,7 +722,7 @@ export default function InscripcionPage() {
                 </div>
                 <h1 className="text-4xl md:text-6xl font-bold mb-6 text-white font-bebas">¡Inscripción Exitosa!</h1>
                 <p className="text-gray-300 mb-10 px-4 text-lg md:text-2xl leading-relaxed max-w-2xl mx-auto font-barlow">
-                  Hemos recibido tus datos correctamente. Por favor, <strong className="text-white">notifica tu pago por WhatsApp</strong> para validar tu cupo inmediatamente.
+                  Hemos recibido tus datos correctamente. Tu pago será validado en los siguientes <strong className="text-white">2 a 3 días laborales.</strong> Revisala en la pestaña de verificación.
                 </p>
 
                 {/* Resumen Completo */}
@@ -793,12 +786,10 @@ export default function InscripcionPage() {
 
                 <div className="flex flex-col items-center gap-4">
                     <a 
-                      href={whatsLink || "#"} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-3 bg-[#25D366] text-black px-10 py-5 rounded-full font-bold hover:bg-[#20bd5a] transition shadow-[0_0_30px_#25D36650] hover:scale-105 text-lg md:text-xl font-barlow"
+                      href="/verificar" 
+                      className="inline-flex items-center gap-3 bg-[#9B5CFF] text-white px-10 py-5 rounded-full font-bold hover:bg-[#8A4DE0] transition shadow-[0_0_30px_#9B5CFF50] hover:scale-105 text-lg md:text-xl font-barlow"
                     >
-                       <Phone size={24}/> Notificar por WhatsApp
+                       <Search size={24}/> Ir a Pestaña de Verificación
                     </a>
 
                     <button 
