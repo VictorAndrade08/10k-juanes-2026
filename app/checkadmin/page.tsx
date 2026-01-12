@@ -11,10 +11,11 @@ import {
   Fingerprint, Zap, Info, CreditCard, Share2, XCircle, AlertOctagon, Hash, Calendar,
   Maximize2, Database, Image as ImageIcon, User, Wallet, FileWarning, Unlock, LogOut,
   Users, Accessibility, LayoutDashboard, ChevronRight, Check, Landmark, Tag, CheckCircle, File, ThumbsUp, Eraser,
-  Users2
+  Users2, Contact, BadgeAlert, ArrowLeftRight, FileSearch
 } from 'lucide-react';
 
 // --- CONFIGURACIÓN FIREBASE (HÍBRIDA Y ROBUSTA) ---
+// Mantenemos estrictamente tu lógica de conexión para soportar local.env y el entorno de Canvas
 let app: FirebaseApp | undefined;
 let auth: Auth | undefined;
 let db: Firestore | undefined;
@@ -23,11 +24,14 @@ let appId = typeof __app_id !== 'undefined' ? __app_id : 'bunker-anti-fraude-10k
 
 try {
   let config = null;
+  // Prioridad 1: Entorno de Canvas (Variables inyectadas)
   // @ts-ignore
   if (typeof __firebase_config !== 'undefined') {
     // @ts-ignore
     config = JSON.parse(__firebase_config);
-  } else if (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+  } 
+  // Prioridad 2: Entorno Local (Variables de entorno process.env)
+  else if (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
     config = {
       apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
       authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -47,6 +51,7 @@ try {
   console.error("🔥 Error Inicializando Firebase:", error);
 }
 
+// Variables de entorno para servicios externos
 const GEMINI_KEY = typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_GEMINI_API_KEY || "") : "";
 const AIRTABLE_CONFIG_KEY = 'verificador_ruta_3_juanes_config';
 const ACCESS_PIN = "1026"; 
@@ -66,6 +71,7 @@ interface Record {
   fotoUrl: string | null;
   docExtraido: string | null;
   montoExtraido: number | null;
+  nombreExtraido: string | null; // Nuevo campo para nombre detectado por OCR
   tipoComprobante: string | null; // Nuevo campo para tipo (FISICO/DIGITAL)
   statusIA: 'pendiente' | 'escaneando' | 'listo' | 'error';
 }
@@ -89,9 +95,12 @@ interface MatchResult {
   estimatedPeople: number;
   confidenceScore: number; 
   totalExpectedValue: number; // Nuevo: Suma de valores de los atletas encontrados
+  isInvertedOrder: boolean; // Nuevo: Flag para detectar inversión de nombres
+  isStrongNameMatch: boolean; // Nuevo: Flag para identidad confirmada (2+ coincidencias)
 }
 
-export default function BunkerPage() {
+// Renombrado a App para compatibilidad con el sistema, lógica interna idéntica
+export default function App() {
   const [isLocked, setIsLocked] = useState(true);
   const [pinInput, setPinInput] = useState("");
   const [pinError, setPinError] = useState(false);
@@ -159,6 +168,7 @@ export default function BunkerPage() {
 
   useEffect(() => {
     if (!user || !db) return;
+    // IMPORTANTE: Ruta segura para datos públicos/compartidos del sistema
     const q = collection(db, 'artifacts', appId, 'public', 'data', 'verified_receipts');
     return onSnapshot(q, (snap) => {
       const docs: any = {};
@@ -215,6 +225,7 @@ export default function BunkerPage() {
           fotoUrl: r.fields['Comprobante']?.[0]?.url || null,
           docExtraido: null, 
           montoExtraido: null,
+          nombreExtraido: null, // Init
           tipoComprobante: null,
           statusIA: 'pendiente'
         })));
@@ -226,7 +237,10 @@ export default function BunkerPage() {
   const scanReceiptIA = async (record: Record) => {
     if (!record.fotoUrl) return;
     const apiKeyToUse = GEMINI_KEY || config.apiKey;
-    if (!apiKeyToUse || apiKeyToUse.startsWith('pat')) { if (!GEMINI_KEY) return showStatus('error', 'Falta API Gemini'); }
+    // Verificación básica de seguridad para API Key
+    if (!apiKeyToUse || (apiKeyToUse.startsWith('pat') && !GEMINI_KEY)) { 
+        if (!GEMINI_KEY && apiKeyToUse.startsWith('pat')) return showStatus('error', 'Falta API Gemini'); 
+    }
 
     setAirtableRecords(prev => prev.map(r => r.id === record.id ? { ...r, statusIA: 'escaneando' } : r));
     setScanningId(record.id);
@@ -235,11 +249,13 @@ export default function BunkerPage() {
       const imageData = await urlToBase64(record.fotoUrl);
       if (!imageData) throw new Error("CORS");
       
-      const prompt = `Analiza este comprobante.
+      // PROMPT ACTUALIZADO PARA LEER NOMBRE
+      const prompt = `Analiza este comprobante bancario.
       1. Extrae el NÚMERO DE DOCUMENTO (secuencial, referencia).
       2. Extrae el MONTO.
-      3. Detecta si es "FISICO" (foto de papel, papeleta ventanilla, manuscrito) o "DIGITAL" (captura web/app).
-      Responde estrictamente con este JSON: {"documento": "123456", "monto": 30.00, "tipo": "FISICO"}`;
+      3. Extrae el NOMBRE del titular de la cuenta origen o persona que realiza el pago (si es legible).
+      4. Detecta si es "FISICO" (foto de papel, papeleta ventanilla, manuscrito) o "DIGITAL" (captura web/app).
+      Responde estrictamente con este JSON: {"documento": "123456", "monto": 30.00, "tipo": "FISICO", "nombre": "JUAN PEREZ"}`;
 
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_KEY}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -254,7 +270,8 @@ export default function BunkerPage() {
           ...r, 
           docExtraido: docId, 
           montoExtraido: json.monto, 
-          tipoComprobante: json.tipo || 'DIGITAL', // Guardamos el tipo
+          nombreExtraido: json.nombre ? String(json.nombre).toUpperCase() : null, // Guardamos el nombre
+          tipoComprobante: json.tipo || 'DIGITAL', 
           statusIA: docId ? 'listo' : 'error' 
       } : r));
     } catch (e) { setAirtableRecords(prev => prev.map(r => r.id === record.id ? { ...r, statusIA: 'error' } : r)); } finally { setScanningId(null); }
@@ -336,6 +353,8 @@ export default function BunkerPage() {
       let nameMismatch = false;
       let isFamily = false;
       let confidence = 0;
+      let isInvertedOrder = false;
+      let isStrongNameMatch = false;
 
       if (matchedRecords.length > 0) {
          const record = matchedRecords[0]; 
@@ -354,20 +373,32 @@ export default function BunkerPage() {
 
          const isPhysical = record.tipoComprobante === 'FISICO';
 
+         // MEJORA: Lógica más permisiva si el Documento coincide.
          if (matchType === 'documento') {
-             if (matchCount >= 1) {
+             if (matchCount >= 2) { 
+                 // CASO FUERTE: Coinciden al menos 2 palabras (ej. 2 apellidos) + el documento.
                  nameMismatch = false; 
+                 isStrongNameMatch = true; // ES LA PERSONA
                  confidence = 100;
              } 
-             else if (isPhysical) {
+             else if (isPhysical) { // Papel suele no tener nombre claro
                  nameMismatch = false; 
                  confidence = 100;
              }
+             else if (matchCount >= 1) { 
+                 // CASO PARCIAL: 1 palabra coincide.
+                 nameMismatch = false; 
+                 isInvertedOrder = true; 
+                 confidence = 90;
+             }
              else {
-                 nameMismatch = true; 
-                 confidence = 20;
+                 // Documento coincide pero NINGUNA palabra del nombre coincide.
+                 nameMismatch = true;
+                 isFamily = true; 
+                 confidence = 50;
              }
          } else {
+             // Match solo por nombre
              if (matchCount >= 2) {
                  nameMismatch = false; 
                  confidence = 100;
@@ -414,7 +445,7 @@ export default function BunkerPage() {
       return {
         bank, records: matchedRecords, status, matchType, claimedBy: historical?.atleta,
         nameMismatch, isFamily, isGroupPayment, paymentStatus, estimatedPeople, confidenceScore: confidence,
-        totalExpectedValue
+        totalExpectedValue, isInvertedOrder, isStrongNameMatch
       };
     });
 
@@ -639,9 +670,23 @@ export default function BunkerPage() {
                         {m.bank.esInterbancaria && <Landmark size={12} className="text-amber-500"/>}
                         {m.bank.depositor}
                      </span>
+                     
+                     {/* --- MOSTRAR NOMBRE DEL BANCO EXPLICITAMENTE PARA COMPARAR --- */}
+                     {m.records.length > 0 && !m.status.includes('fraud') && (
+                        <div className="mt-3 p-2 bg-zinc-950/50 rounded border border-zinc-800/50">
+                            <span className="block text-[8px] font-bold text-zinc-600 uppercase mb-0.5">TITULAR CUENTA (BANCO)</span>
+                            <span className="text-[10px] text-zinc-300 font-medium block leading-tight">{m.bank.depositor}</span>
+                        </div>
+                     )}
+
+                     {m.nameMismatch && !m.status.includes('fraud') && !m.isInvertedOrder && !m.isStrongNameMatch && (
+                        <div className="mt-2 p-2 bg-orange-900/10 border border-orange-500/20 rounded text-[9px] text-orange-400 font-bold leading-tight">
+                            <span className="flex items-center gap-1 mb-1"><AlertTriangle size={10}/> NOMBRE DIFIERE MUCHO</span>
+                        </div>
+                     )}
                   </div>
 
-                  {/* CRM DATA - AHORA MUESTRA LISTA SI ES GRUPO */}
+                  {/* CRM DATA - AHORA MUESTRA LISTA DETALLADA */}
                   <div className="flex-1 p-4 flex flex-col justify-center relative">
                      {m.records.length > 0 ? (
                         <>
@@ -654,60 +699,91 @@ export default function BunkerPage() {
                                       {m.records.length > 1 && <span className="text-[9px] text-violet-400 font-bold flex items-center gap-0.5 bg-violet-950/30 px-1.5 rounded-full border border-violet-500/20"><Users2 size={10}/> GRUPO DE {m.records.length}</span>}
                                   </div>
                                   
-                                  {/* --- RESTAURADO: INTERFAZ ORIGINAL PARA MATCH ÚNICO --- */}
-                                  {m.records.length === 1 ? (
-                                      <div className="flex justify-between items-start mt-1 w-full">
-                                          <span className="font-bold text-zinc-200 text-sm leading-tight">{m.records[0].nombre}</span>
-                                          {/* BOTÓN VER DOC RESTAURADO AQUÍ */}
-                                          {m.records[0].fotoUrl && (
-                                              <button onClick={() => setSelectedImage(m.records[0].fotoUrl)} className="text-[9px] bg-zinc-800 px-3 py-1 rounded text-zinc-400 border border-zinc-700 hover:text-white hover:border-zinc-500 transition-colors uppercase font-bold tracking-wider ml-2 shrink-0">
-                                                  VER DOC
-                                              </button>
-                                          )}
-                                      </div>
-                                  ) : (
-                                      /* INTERFAZ DE GRUPO (Lista pequeña) */
-                                      <div className="flex flex-col gap-1 mt-1">
-                                          {m.records.map((r, idx) => (
-                                              <div key={idx} className="flex items-center gap-2 bg-zinc-950/40 p-1 rounded border border-zinc-800/50">
-                                                  <span className="font-bold text-zinc-200 text-xs leading-tight flex-1">{r.nombre}</span>
-                                                  <span className="text-[9px] text-zinc-500 font-mono">{r.cedula}</span>
-                                                  {r.fotoUrl && <button onClick={() => setSelectedImage(r.fotoUrl)} className="text-[9px] bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-400 hover:text-white"><Eye size={10}/></button>}
+                                  {/* --- NUEVA INTERFAZ DETALLADA DE ATLETAS --- */}
+                                  <div className="flex flex-col gap-2 mt-2 w-full">
+                                      {m.records.map((r, idx) => (
+                                          <div key={idx} className="bg-zinc-950/40 p-2 rounded-lg border border-zinc-800/50 flex flex-col gap-1.5 relative overflow-hidden">
+                                              {/* Visual Indicator for Name Inversion */}
+                                              {m.isInvertedOrder && <div className="absolute top-0 right-0 p-1 bg-sky-500/10 rounded-bl-lg text-sky-500"><ArrowLeftRight size={10}/></div>}
+                                              
+                                              <div className="flex justify-between items-center pr-4">
+                                                  <div className="flex flex-col">
+                                                      <span className="block text-[8px] font-bold text-zinc-600 uppercase mb-0.5">NOMBRE ATLETA (CRM)</span>
+                                                      <span className="font-bold text-zinc-200 text-sm leading-tight flex items-center gap-2">
+                                                          {r.nombre}
+                                                      </span>
+                                                  </div>
+                                                  {r.fotoUrl && (
+                                                      <button onClick={() => setSelectedImage(r.fotoUrl)} className="text-[9px] bg-zinc-800 px-2 py-1 rounded text-zinc-400 hover:text-white border border-transparent hover:border-zinc-600 flex items-center gap-1 uppercase font-bold tracking-wider">
+                                                          <Eye size={10}/> Ver Doc
+                                                      </button>
+                                                  )}
                                               </div>
-                                          ))}
-                                      </div>
-                                  )}
+                                              
+                                              {/* DATA GRID */}
+                                              <div className="grid grid-cols-4 gap-2 text-[10px] text-zinc-500 bg-zinc-900/50 p-1.5 rounded border border-zinc-800/30">
+                                                  <div>
+                                                      <span className="block font-bold text-zinc-600 text-[8px] uppercase tracking-wider">Cédula</span>
+                                                      <span className="font-mono text-zinc-300">{r.cedula}</span>
+                                                  </div>
+                                                  <div>
+                                                      <span className="block font-bold text-zinc-600 text-[8px] uppercase tracking-wider">Edad</span>
+                                                      <span className="font-mono text-zinc-300">{r.edad} años</span>
+                                                  </div>
+                                                  <div>
+                                                      <span className="block font-bold text-zinc-600 text-[8px] uppercase tracking-wider">Categoría</span>
+                                                      <span className="font-mono text-zinc-300 truncate" title={r.categoria}>{r.categoria}</span>
+                                                  </div>
+                                                  <div>
+                                                      <span className="block font-bold text-zinc-600 text-[8px] uppercase tracking-wider">Valor Esp.</span>
+                                                      <span className={`font-mono font-bold ${r.valorEsperado < 30 ? 'text-emerald-400' : 'text-zinc-300'}`}>${r.valorEsperado.toFixed(2)}</span>
+                                                  </div>
+                                              </div>
+
+                                              {/* --- NUEVO: DATOS OCR --- */}
+                                              {(r.docExtraido || r.nombreExtraido) && (
+                                                  <div className="bg-sky-900/10 border border-sky-500/20 p-2 rounded grid grid-cols-2 gap-2 mt-1">
+                                                      {r.docExtraido && (
+                                                          <div>
+                                                              <span className="block text-[8px] font-bold text-sky-500 uppercase tracking-wider flex items-center gap-1"><FileSearch size={8}/> # Comprobante (OCR)</span>
+                                                              <span className="text-[10px] font-mono font-bold text-sky-200">{r.docExtraido}</span>
+                                                          </div>
+                                                      )}
+                                                      {r.nombreExtraido && (
+                                                          <div>
+                                                              <span className="block text-[8px] font-bold text-sky-500 uppercase tracking-wider flex items-center gap-1"><Scan size={8}/> Nombre en Recibo (OCR)</span>
+                                                              <span className="text-[10px] font-mono font-bold text-sky-200 truncate block" title={r.nombreExtraido}>{r.nombreExtraido}</span>
+                                                          </div>
+                                                      )}
+                                                  </div>
+                                              )}
+                                              
+                                              {/* BADGES */}
+                                              <div className="flex gap-1">
+                                                  {r.tieneDiscapacidad && <span className="text-[9px] px-1.5 py-0.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded flex items-center gap-1"><Accessibility size={10}/> Discapacidad</span>}
+                                                  {r.esTerceraEdad && <span className="text-[9px] px-1.5 py-0.5 bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded flex items-center gap-1"><Contact size={10}/> 3ra Edad</span>}
+                                              </div>
+                                          </div>
+                                      ))}
+                                  </div>
                               </div>
                            </div>
                            
-                           {/* INFO EXTRA (Solo del primero si es grupo, o resumen) */}
-                           <div className="flex items-center justify-between gap-4 mt-2 mb-1">
-                               <div className="flex items-center gap-2 text-[10px] text-zinc-400">
-                                   {m.records.length > 1 ? (
-                                       <span className="text-zinc-500">Monto Esperado Total: <span className="text-white font-bold">${m.totalExpectedValue.toFixed(2)}</span></span>
-                                   ) : (
-                                       <>
-                                           <Hash size={12}/> <span>{m.records[0].cedula}</span>
-                                           <span className="text-zinc-600">|</span>
-                                           <Tag size={12}/> <span>{m.records[0].categoria}</span>
-                                       </>
-                                   )}
+                           {/* INFO EXTRA GROUP TOTAL */}
+                           {m.records.length > 1 && (
+                               <div className="flex items-center justify-end gap-2 mt-1 px-1">
+                                   <span className="text-[10px] text-zinc-500">Total Esperado: <span className="text-white font-bold text-xs">${m.totalExpectedValue.toFixed(2)}</span></span>
                                </div>
-                               <div className="flex items-center justify-end gap-2">
-                                   <span className="text-[9px] font-bold text-sky-600 uppercase">DOC. OCR:</span>
-                                   <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded flex items-center gap-1 ${m.records[0].docExtraido ? 'bg-sky-900/20 text-sky-300' : 'text-zinc-600'}`}>
-                                       {m.records[0].tipoComprobante === 'FISICO' && <File size={10} className="text-amber-400"/>}
-                                       {m.records[0].docExtraido || 'NO ESCANEADO'}
-                                   </span>
-                               </div>
-                           </div>
+                           )}
 
-                           <div className="flex gap-2 mt-auto flex-wrap">
-                              {m.nameMismatch && !m.status.includes('fraud') && (
+                           <div className="flex gap-2 mt-auto flex-wrap pt-2">
+                              {m.isStrongNameMatch && !m.status.includes('fraud') && <Badge type="success">IDENTIDAD CONFIRMADA</Badge>}
+                              {m.isInvertedOrder && !m.status.includes('fraud') && !m.isStrongNameMatch && <Badge type="info">NOMBRE INVERTIDO / PARCIAL</Badge>}
+                              {m.nameMismatch && !m.status.includes('fraud') && !m.isInvertedOrder && !m.isStrongNameMatch && (
                                   <Badge type={m.isFamily ? 'info' : 'warning'}>{m.isFamily ? 'POSIBLE FAMILIAR' : 'NOMBRE DIFERENTE'}</Badge>
                               )}
                               {m.isGroupPayment && <Badge type="purple">PAGO GRUPAL</Badge>}
-                              {!m.nameMismatch && m.matchType === 'documento' && <Badge type="success">DOC + APELLIDOS OK</Badge>}
+                              {!m.nameMismatch && m.matchType === 'documento' && !m.isInvertedOrder && !m.isStrongNameMatch && <Badge type="success">DOC + APELLIDOS OK</Badge>}
                               {m.bank.esInterbancaria && <Badge type="warning">INTERBANCARIA</Badge>}
                               {m.records[0].tipoComprobante === 'FISICO' && <Badge type="info">PAPEL FISICO</Badge>}
                            </div>
