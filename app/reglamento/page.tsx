@@ -212,7 +212,7 @@ export default function ReglamentoSection() {
     <div className="rounded-2xl border border-black/10 bg-black/[0.03] p-5">
       <p className="font-semibold mb-1">Punto físico</p>
       <p className="text-black/80">
-        Cooperativa OSCUS — Sucre entre La Palma y Bolívar, Ambato.
+        Cooperativa OSCUS — Sucre entre Lalama y Bolívar, Ambato.
       </p>
     </div>
   </div>
