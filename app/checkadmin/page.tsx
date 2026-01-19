@@ -11,7 +11,7 @@ import {
   Fingerprint, Zap, Info, CreditCard, Share2, XCircle, AlertOctagon, Hash, Calendar,
   Maximize2, Database, Image as ImageIcon, User, Wallet, FileWarning, Unlock, LogOut,
   Users, Accessibility, LayoutDashboard, ChevronRight, Check, Landmark, Tag, CheckCircle, File, ThumbsUp, Eraser,
-  Users2, Contact, BadgeAlert, ArrowLeftRight, FileSearch, CheckCheck, Play, Zap as ZapFast
+  Users2, Contact, BadgeAlert, ArrowLeftRight, FileSearch, CheckCheck, Play, Zap as ZapFast, FileX
 } from 'lucide-react';
 
 // --- CONFIGURACIÓN FIREBASE ---
@@ -81,8 +81,8 @@ interface MatchResult {
     esInterbancaria: boolean;
   };
   records: Record[];
-  status: 'found' | 'missing' | 'fraud' | 'verified' | 'reused';
-  matchType: 'documento' | 'nombre';
+  status: 'found' | 'missing' | 'fraud' | 'verified' | 'reused' | 'doc_mismatch';
+  matchType: 'documento' | 'nombre_only' | 'none'; // nombre_only es ahora un warning
   claimedBy?: string;
   nameMismatch: boolean;
   isFamily: boolean;
@@ -94,6 +94,25 @@ interface MatchResult {
   isInvertedOrder: boolean;
   isStrongNameMatch: boolean;
 }
+
+// --- NORMALIZACIÓN ESTRICTA (REGLA #1) ---
+const cleanDocNumber = (doc: string | number | null) => {
+    if (!doc) return "";
+    // Elimina letras, espacios, guiones y ceros a la izquierda
+    // "REF: 00012345" -> "12345"
+    return String(doc).replace(/\D/g, '').replace(/^0+/, '');
+};
+
+const areDocsStrictlyEqual = (ocrDoc: string | null, bankDoc: string) => {
+    const cleanOCR = cleanDocNumber(ocrDoc);
+    const cleanBank = cleanDocNumber(bankDoc);
+    
+    if (!cleanOCR || !cleanBank) return false;
+    
+    // El Banco suele tener mas ceros o digitos extra, o el OCR lee menos.
+    // Match si son idénticos o si uno termina con el otro (sufijo).
+    return cleanOCR === cleanBank || cleanBank.endsWith(cleanOCR) || cleanOCR.endsWith(cleanBank);
+};
 
 export default function App() {
   const [isLocked, setIsLocked] = useState(true);
@@ -118,26 +137,19 @@ export default function App() {
   const [scanningId, setScanningId] = useState<string | null>(null);
   const [isScanningAll, setIsScanningAll] = useState(false);
   
-  // --- ESTADO DE PROGRESO ---
   const [scanProgress, setScanProgress] = useState({ current: 0, total: 0 });
-
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [status, setStatus] = useState({ type: '', message: '' });
-
-  // --- UI STATE ---
   const [searchTerm, setSearchTerm] = useState("");
   
-  // --- MANUAL VERIFY MODAL STATE ---
   const [verifyModalOpen, setVerifyModalOpen] = useState(false);
   const [activeVerifyRecords, setActiveVerifyRecords] = useState<Record[]>([]);
   const [manualDocId, setManualDocId] = useState("");
   const [manualAmount, setManualAmount] = useState("");
 
-  // Refs para accesos directos
   const runBtnRef = useRef<HTMLButtonElement>(null);
   const bulkBtnRef = useRef<HTMLButtonElement>(null);
 
-  // --- INIT ---
   useEffect(() => {
     setIsMounted(true);
     const saved = localStorage.getItem(AIRTABLE_CONFIG_KEY);
@@ -179,15 +191,12 @@ export default function App() {
     }, (error) => console.error("Error Seguridad Firestore:", error));
   }, [user]);
 
-  // --- ATAJOS DE TECLADO ---
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-        // CTRL + ENTER = EJECUTAR
         if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             runBtnRef.current?.click();
         }
-        // CTRL + SHIFT + ENTER = ACEPTAR PERFECTOS
         if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'Enter') {
             e.preventDefault();
             bulkBtnRef.current?.click();
@@ -197,7 +206,6 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // --- HELPERS ---
   const handleUnlock = (e: React.FormEvent) => {
     e.preventDefault();
     if (pinInput === ACCESS_PIN) { setIsLocked(false); setPinError(false); } 
@@ -209,7 +217,6 @@ export default function App() {
   
   const normalizeText = (text: string) => text.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9]/g, " ").replace(/\s+/g, " ").trim();
 
-  // --- LOGICA DE PROCESAMIENTO ---
   const urlToBase64 = async (url: string) => {
     try {
       const response = await fetch(url, { mode: 'cors' }).catch(() => null);
@@ -256,22 +263,22 @@ export default function App() {
   const scanReceiptIA = async (record: Record) => {
     if (!record.fotoUrl) return;
     const apiKeyToUse = GEMINI_KEY || config.apiKey;
-    if (!apiKeyToUse || (apiKeyToUse.startsWith('pat') && !GEMINI_KEY)) return; // Silently fail or show toast outside
+    if (!apiKeyToUse || (apiKeyToUse.startsWith('pat') && !GEMINI_KEY)) return; 
 
-    // No setear estado global aquí para evitar re-renders masivos en el loop paralelo, 
-    // solo actualizar cuando termine o usar setScanningId para individuales.
     setAirtableRecords(prev => prev.map(r => r.id === record.id ? { ...r, statusIA: 'escaneando' } : r));
 
     try {
       const imageData = await urlToBase64(record.fotoUrl);
       if (!imageData) throw new Error("CORS");
       
-      const prompt = `Analiza este comprobante. Extrae:
-      1. DOCUMENTO (Secuencial/Referencia, solo números).
-      2. MONTO.
-      3. NOMBRE ORIGEN.
-      4. TIPO (FISICO/DIGITAL).
-      Responde JSON: {"documento": "123456", "monto": 30.00, "tipo": "DIGITAL", "nombre": "JUAN PEREZ"}`;
+      const prompt = `Extrae datos de este comprobante bancario.
+      IMPORTANTE: El Número de Documento es lo más crítico.
+      
+      1. DOCUMENTO: Busca "Ref:", "Secuencial", "Documento", "Control". Extrae SOLO NÚMEROS.
+      2. MONTO: Valor total.
+      3. NOMBRE: Quién transfiere.
+      
+      Output JSON: {"documento": "12345", "monto": 30.00, "nombre": "JUAN"}`;
 
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_KEY}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -280,6 +287,7 @@ export default function App() {
       const result = await response.json();
       const text = result.candidates?.[0]?.content?.parts?.[0]?.text.replace(/```json/g, '').replace(/```/g, '').trim();
       const json = JSON.parse(text || "{}");
+      
       const docId = json.documento ? String(json.documento).replace(/\D/g, '') : null;
       
       setAirtableRecords(prev => prev.map(r => r.id === record.id ? { 
@@ -295,25 +303,16 @@ export default function App() {
     }
   };
 
-  // --- ESCANEO PARALELO (TURBO) ---
   const scanAll = async () => {
     setIsScanningAll(true);
     const pendings = airtableRecords.filter(r => r.fotoUrl && r.statusIA === 'pendiente');
     setScanProgress({ current: 0, total: pendings.length });
-    
-    // TAMAÑO DEL LOTE: 5 a la vez (Mucho más rápido)
     const BATCH_SIZE = 5; 
     
     for (let i = 0; i < pendings.length; i += BATCH_SIZE) {
         const batch = pendings.slice(i, i + BATCH_SIZE);
-        // Disparar 5 peticiones simultáneas
         await Promise.all(batch.map(r => scanReceiptIA(r)));
-        
-        // Actualizar progreso visualmente
-        setScanProgress(prev => ({ 
-            ...prev, 
-            current: Math.min(prev.current + batch.length, prev.total) 
-        }));
+        setScanProgress(prev => ({ ...prev, current: Math.min(prev.current + batch.length, prev.total) }));
     }
     
     setIsScanningAll(false); 
@@ -327,12 +326,10 @@ export default function App() {
     const regex = /(\d{2}[\/\-]\d{2}[\/\-]\d{4})\s+(\d{4,20})\s+([A-Z0-9\s]+)/g;
     let match;
     const bankEntries = [];
-    const seen = new Set();
     const normalizedData = bankData.replace(/\r\n/g, '\n');
 
     while ((match = regex.exec(normalizedData)) !== null) {
       const docNum = match[2];
-      seen.add(docNum);
       const lineEnd = normalizedData.indexOf('\n', match.index);
       const lineStart = normalizedData.lastIndexOf('\n', match.index);
       const fullLine = normalizedData.substring(lineStart + 1, lineEnd !== -1 ? lineEnd : undefined);
@@ -340,7 +337,6 @@ export default function App() {
       let depositor = fullLine.replace(/TRANSFERENC.*?DE\s+|DEP\s+CNB\s+|CONST\.\s+RECAUDACION\s+/i, '').replace(/[\d\/]/g, '').trim();
       const amountMatch = fullLine.match(/(\d{1,4}[.,]\d{2})(?!\d)/);
       let monto = 0; if (amountMatch) monto = parseFloat(amountMatch[0].replace(',', '.'));
-
       const esInterbancaria = /INTERB|SPI|OTROS BANCOS|TRANSF\.|BCE|EN LINEA|ONLINE|TRANSFERENCIA/i.test(fullLine);
 
       if (monto > 0) bankEntries.push({ documento: docNum, monto, depositor, esInterbancaria, esDuplicadoBanco: false });
@@ -349,126 +345,108 @@ export default function App() {
     const assignedIds = new Set();
     
     const newMatches = bankEntries.map(bank => {
-      let matchedRecords = airtableRecords.filter(r => r.docExtraido === bank.documento);
-      let matchType: 'documento' | 'nombre' = 'documento';
+      // ----------------------------------------------------
+      // REGLA 1: BUSQUEDA POR DOCUMENTO (ESTRICTA NORMALIZADA)
+      // ----------------------------------------------------
+      const matchedRecords = airtableRecords.filter(r => {
+          if(!r.docExtraido) return false;
+          return areDocsStrictlyEqual(r.docExtraido, bank.documento);
+      });
+      
+      let matchType: 'documento' | 'nombre_only' | 'none' = 'none';
+      let status: MatchResult['status'] = 'missing';
 
-      if (matchedRecords.length === 0) {
-         const foundByName = airtableRecords.find(r => {
-            if (assignedIds.has(r.id)) return false;
-            const bankNameParts = normalizeText(bank.depositor).split(/\s+/).filter(p => p.length > 1);
-            if (bankNameParts.length === 0) return false;
-            const crmNameNorm = normalizeText(r.nombre);
-            const crmNameParts = crmNameNorm.split(/\s+/).filter(p => p.length > 1);
-            let wordMatchCount = 0;
-            bankNameParts.forEach(bPart => {
-                if (crmNameParts.some(cPart => cPart === bPart || cPart.includes(bPart) || bPart.includes(cPart))) {
-                    wordMatchCount++;
-                }
-            });
-            if (bank.esInterbancaria) {
-                return wordMatchCount >= 1; 
-            } else {
-                return wordMatchCount >= 2 || (wordMatchCount >= 1 && bankNameParts.length <= 2);
-            }
-         });
-         
-         if (foundByName) {
-             matchedRecords = [foundByName];
-             matchType = 'nombre';
-         }
+      // SI HAY MATCH DE DOCUMENTO -> ES UN "FOUND"
+      if (matchedRecords.length > 0) {
+          matchType = 'documento';
+          status = 'found';
+          matchedRecords.forEach(r => assignedIds.add(r.id));
+      } 
+      else {
+          // ----------------------------------------------------
+          // REGLA 2: FALLBACK POR NOMBRE PERO SIN VALIDAR (SOLO AVISO)
+          // ----------------------------------------------------
+          const foundByName = airtableRecords.find(r => {
+             if (assignedIds.has(r.id)) return false;
+             const bankNameParts = normalizeText(bank.depositor).split(/\s+/).filter(p => p.length > 1);
+             if (bankNameParts.length === 0) return false;
+             const crmNameNorm = normalizeText(r.nombre);
+             const crmNameParts = crmNameNorm.split(/\s+/).filter(p => p.length > 1);
+             
+             let matchCount = 0;
+             bankNameParts.forEach(bPart => {
+                 if (crmNameParts.some(cPart => cPart === bPart || cPart.includes(bPart) || bPart.includes(cPart))) matchCount++;
+             });
+             return matchCount >= 2; // Match fuerte de nombre
+          });
+          
+          if (foundByName) {
+              // ENCONTRAMOS LA PERSONA, PERO EL DOC NO COINCIDE
+              matchedRecords.push(foundByName);
+              matchType = 'nombre_only';
+              status = 'doc_mismatch'; // ESTADO ESPECIAL: NO COINCIDE DOC
+          }
       }
 
-      matchedRecords.forEach(r => assignedIds.add(r.id));
-      const historical = historicalDocs[bank.documento];
+      // ----------------------------------------------------
+      // REGLA 3: VERIFICACIÓN DE FRAUDE (HISTÓRICO)
+      // ----------------------------------------------------
+      const cleanBankDoc = cleanDocNumber(bank.documento);
+      const historical = historicalDocs[cleanBankDoc];
 
+      if (historical) {
+          status = 'fraud';
+          // Excepción: Pagos grupales reales permitidos si el monto del banco cubre a todos
+          if (matchType === 'documento' && matchedRecords.length > 1) {
+             const totalExpected = matchedRecords.reduce((s, r) => s + r.valorEsperado, 0);
+             if (bank.monto >= totalExpected - 1) status = 'reused'; // Es un reuso válido (grupo)
+          }
+      }
+
+      // CALCULOS DE SEGURIDAD
       let nameMismatch = false;
       let isFamily = false;
       let confidence = 0;
-      let isInvertedOrder = false;
-      let isStrongNameMatch = false;
-
-      if (matchedRecords.length > 0) {
-         const record = matchedRecords[0]; 
-         const crmName = normalizeText(record.nombre);
-         const bankName = normalizeText(bank.depositor);
-         const crmParts = Array.from(new Set(crmName.split(/\s+/).filter(p => p.length > 1)));
-         const bankParts = Array.from(new Set(bankName.split(/\s+/).filter(p => p.length > 1)));
-         
-         let matchCount = 0;
-         crmParts.forEach(cPart => {
-             if (bankParts.some(bPart => bPart === cPart || bPart.includes(cPart) || cPart.includes(bPart))) {
-                 matchCount++;
-             }
-         });
-
-         const isPhysical = record.tipoComprobante === 'FISICO';
-
-         if (matchType === 'documento') {
-             if (matchCount >= 2) { 
-                 nameMismatch = false; 
-                 isStrongNameMatch = true;
-                 confidence = 100;
-             } 
-             else if (isPhysical) { 
-                 nameMismatch = false; 
-                 confidence = 100;
-             }
-             else if (matchCount >= 1) { 
-                 nameMismatch = false; 
-                 isInvertedOrder = true; 
-                 confidence = 90;
-             }
-             else {
-                 nameMismatch = true;
-                 isFamily = true; 
-                 confidence = 70; // DOCUMENTO COINCIDE, ALTA CONFIANZA
-             }
-         } else {
-             if (matchCount >= 2) {
-                 nameMismatch = false; 
-                 confidence = 100;
-             } else if (matchCount === 1 && bank.esInterbancaria) {
-                 nameMismatch = false; 
-                 confidence = 100;
-             } else {
-                 nameMismatch = true; 
-                 confidence = 20;
-             }
-         }
-      }
-
       let paymentStatus: 'correct' | 'underpaid' | 'overpaid' = 'correct';
       let isGroupPayment = false;
       let estimatedPeople = 1;
       let totalExpectedValue = 0;
 
       if (matchedRecords.length > 0) {
-        totalExpectedValue = matchedRecords.reduce((sum, r) => sum + r.valorEsperado, 0);
-        if (matchedRecords.length > 1) {
-            isGroupPayment = true;
-            estimatedPeople = matchedRecords.length;
-        } else {
-             if (bank.monto >= matchedRecords[0].valorEsperado * 1.8) {
-                 isGroupPayment = true;
-                 estimatedPeople = Math.round(bank.monto / matchedRecords[0].valorEsperado);
+         // Validar nombre aunque sea match por documento (para detectar familias)
+         const record = matchedRecords[0]; 
+         const crmName = normalizeText(record.nombre);
+         const bankName = normalizeText(bank.depositor);
+         
+         const isNameSimilar = crmName.split(' ').filter(p => p.length>2).some(p => bankName.includes(p));
+         
+         if (matchType === 'documento') {
+             confidence = 100;
+             if (!isNameSimilar) {
+                 nameMismatch = true;
+                 isFamily = true; // Doc coincide, nombre no -> Familiar
              }
-        }
-        if (bank.monto < totalExpectedValue - 0.5) paymentStatus = 'underpaid';
-        else if (bank.monto > totalExpectedValue + 5 && !isGroupPayment) paymentStatus = 'overpaid';
-      
-      } else if (bank.monto >= 40) { 
-          isGroupPayment = true; 
-          estimatedPeople = Math.round(bank.monto / PRICE_DISCOUNT); 
-      }
+         } else {
+             // Es nombre_only
+             confidence = 0; // Confianza 0 para auto-match
+             nameMismatch = true; // Forzamos flag
+         }
 
-      let status: 'found' | 'missing' | 'fraud' | 'verified' | 'reused' = 'missing';
-      if (historical) { status = isGroupPayment ? 'reused' : 'fraud'; } 
-      else if (matchedRecords.length > 0) { status = 'found'; }
+         // Validar Montos
+         totalExpectedValue = matchedRecords.reduce((sum, r) => sum + r.valorEsperado, 0);
+         if (matchedRecords.length > 1 || bank.monto >= matchedRecords[0].valorEsperado * 1.8) {
+            isGroupPayment = true;
+            estimatedPeople = Math.max(matchedRecords.length, Math.round(bank.monto / PRICE_DISCOUNT));
+         }
+
+         if (bank.monto < totalExpectedValue - 0.5) paymentStatus = 'underpaid';
+         else if (bank.monto > totalExpectedValue + 5 && !isGroupPayment) paymentStatus = 'overpaid';
+      }
 
       return {
         bank, records: matchedRecords, status, matchType, claimedBy: historical?.atleta,
         nameMismatch, isFamily, isGroupPayment, paymentStatus, estimatedPeople, confidenceScore: confidence,
-        totalExpectedValue, isInvertedOrder, isStrongNameMatch
+        totalExpectedValue, isInvertedOrder: false, isStrongNameMatch: !nameMismatch
       };
     });
 
@@ -482,7 +460,9 @@ export default function App() {
     setLoading(true);
     try {
       const { documento, monto } = match.bank;
-      const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'verified_receipts', documento);
+      const docIdClean = cleanDocNumber(documento);
+      
+      const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'verified_receipts', docIdClean);
       const docSnap = await getDoc(docRef);
       if (docSnap.exists() && !match.isGroupPayment) { showStatus('error', 'FRAUDE: Doc usado.'); setLoading(false); return; }
 
@@ -499,9 +479,9 @@ export default function App() {
       }
 
       const atletasNames = match.records.map((r: any) => r.nombre).join(', ');
-      const firestoreId = match.records.length > 1 ? `${documento}_GRUPO` : documento;
+      const firestoreId = match.records.length > 1 ? `${docIdClean}_GRUPO` : docIdClean;
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'verified_receipts', firestoreId), { 
-          atleta: atletasNames, fecha: new Date().toISOString(), monto, uid: user.uid, isGroup: true, groupSize: match.records.length
+          atleta: atletasNames, fecha: new Date().toISOString(), monto, uid: user.uid, isGroup: true, groupSize: match.records.length, originalDoc: documento
       });
       
       const verifiedIds = match.records.map((r: any) => r.id);
@@ -513,27 +493,26 @@ export default function App() {
     } catch (e) { console.error(e); showStatus('error', 'Error al guardar.'); } finally { setLoading(false); }
   };
 
+  // BOTON "VALIDAR TODO": AHORA ES SÚPER SEGURO
   const handleBulkConfirm = async () => {
+      // SOLO valida si status es 'found' (match de documento) Y no hay problemas de dinero
       const perfectMatches = matches.filter(m => 
           m.status === 'found' && 
-          m.paymentStatus !== 'underpaid' && 
-          (m.matchType === 'documento' || (!m.nameMismatch || m.isStrongNameMatch))
+          m.matchType === 'documento' &&
+          m.paymentStatus !== 'underpaid'
       );
 
-      if(perfectMatches.length === 0) return showStatus('error', 'No hay coincidencias automáticas seguras.');
-      if(!confirm(`¿Procesar ${perfectMatches.length} pagos AUTOMÁTICAMENTE?`)) return;
+      if(perfectMatches.length === 0) return showStatus('error', 'No hay coincidencias 100% seguras.');
+      if(!confirm(`¿Procesar ${perfectMatches.length} pagos SEGUROS? (Los dudosos se ignorarán)`)) return;
 
       setLoading(true);
       let processed = 0;
-
-      // Procesamiento Paralelo también para validación (bloques de 3)
       const CHUNK_SIZE = 3;
       for (let i = 0; i < perfectMatches.length; i += CHUNK_SIZE) {
           const chunk = perfectMatches.slice(i, i + CHUNK_SIZE);
           await Promise.all(chunk.map(match => confirmInCRM(match)));
           processed += chunk.length;
       }
-      
       setLoading(false);
       showStatus('success', `Se validaron ${processed} pagos automáticamente.`);
   };
@@ -548,17 +527,18 @@ export default function App() {
   const executeManualVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !db || activeVerifyRecords.length === 0) return;
-    const docId = manualDocId.trim() || `MANUAL-${Date.now().toString().slice(-6)}`;
+    const docIdOriginal = manualDocId.trim() || `MANUAL-${Date.now().toString().slice(-6)}`;
+    const docIdClean = cleanDocNumber(docIdOriginal);
     const monto = parseFloat(manualAmount) || 0;
     setLoading(true);
     try {
       for (const record of activeVerifyRecords) {
           await fetch(`https://api.airtable.com/v0/${config.baseId}/${encodeURIComponent(config.tableName)}/${record.id}`, {
             method: 'PATCH', headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fields: { 'Etapa': 'Inscrito', 'Numero Comprobante': docId, 'Comentarios': `✅ VALIDADO MANUAL [${new Date().toLocaleDateString()}] - $${monto} - Ref: ${docId}` } })
+            body: JSON.stringify({ fields: { 'Etapa': 'Inscrito', 'Numero Comprobante': docIdOriginal, 'Comentarios': `✅ VALIDADO MANUAL [${new Date().toLocaleDateString()}] - $${monto} - Ref: ${docIdOriginal}` } })
           });
       }
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'verified_receipts', docId), { 
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'verified_receipts', docIdClean), { 
         atleta: activeVerifyRecords.map(r => r.nombre).join(', '), fecha: new Date().toISOString(), monto: monto, uid: user.uid, isGroup: false, manual: true
       });
       const verifiedIds = activeVerifyRecords.map(r => r.id);
@@ -573,8 +553,8 @@ export default function App() {
 
   const perfectMatchesCount = matches.filter(m => 
     m.status === 'found' && 
-    m.paymentStatus !== 'underpaid' && 
-    (m.matchType === 'documento' || (!m.nameMismatch || m.isStrongNameMatch))
+    m.matchType === 'documento' &&
+    m.paymentStatus !== 'underpaid'
   ).length;
 
   if (!isMounted) return null;
@@ -590,7 +570,7 @@ export default function App() {
              <div className="bg-sky-500/10 p-2 rounded-lg border border-sky-500/20"><ShieldCheck size={20} className="text-sky-400"/></div>
              <div>
                 <h1 className="text-sm font-black uppercase tracking-widest text-white leading-none">Búnker 10k</h1>
-                <span className="text-[10px] font-medium text-zinc-500 tracking-wider">SISTEMA ANTI-FRAUDE TURBO</span>
+                <span className="text-[10px] font-medium text-zinc-500 tracking-wider">SISTEMA ANTI-FRAUDE STRICT</span>
              </div>
           </div>
           <div className="flex gap-2">
@@ -676,8 +656,21 @@ export default function App() {
            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3 bg-zinc-950">
               {matches.length === 0 && <div className="h-full flex flex-col items-center justify-center text-zinc-800 gap-4"><LayoutDashboard size={64} strokeWidth={0.5} className="opacity-20"/><span className="text-xs font-bold uppercase tracking-widest opacity-40">Esperando datos para procesar...</span></div>}
               {matches.map((m, i) => (
-                <div key={i} className={`flex items-stretch rounded-xl border transition-all text-sm h-auto min-h-[5rem] shadow-lg relative overflow-hidden group ${m.status === 'verified' ? 'bg-zinc-900/30 border-emerald-900/30 opacity-60' : m.status === 'fraud' ? 'bg-rose-950/10 border-rose-900/40' : 'bg-zinc-900/80 border-zinc-800 hover:border-zinc-700'}`}>
-                  <div className={`w-1.5 shrink-0 ${m.status === 'verified' ? 'bg-emerald-500' : m.status === 'fraud' ? 'bg-rose-500' : m.isGroupPayment ? 'bg-violet-500' : m.paymentStatus === 'underpaid' ? 'bg-amber-500' : m.nameMismatch ? 'bg-orange-500' : m.status === 'found' ? 'bg-sky-500' : 'bg-zinc-700'}`}></div>
+                <div key={i} className={`flex items-stretch rounded-xl border transition-all text-sm h-auto min-h-[5rem] shadow-lg relative overflow-hidden group 
+                    ${m.status === 'verified' ? 'bg-zinc-900/30 border-emerald-900/30 opacity-60' 
+                    : m.status === 'fraud' ? 'bg-rose-950/10 border-rose-900/40' 
+                    : m.status === 'doc_mismatch' ? 'bg-orange-950/10 border-orange-900/40'
+                    : 'bg-zinc-900/80 border-zinc-800 hover:border-zinc-700'}`}>
+                  
+                  <div className={`w-1.5 shrink-0 
+                      ${m.status === 'verified' ? 'bg-emerald-500' 
+                      : m.status === 'fraud' ? 'bg-rose-500' 
+                      : m.status === 'doc_mismatch' ? 'bg-orange-500'
+                      : m.isGroupPayment ? 'bg-violet-500' 
+                      : m.paymentStatus === 'underpaid' ? 'bg-amber-500' 
+                      : m.status === 'found' ? 'bg-sky-500' 
+                      : 'bg-zinc-700'}`}></div>
+
                   <div className="w-[240px] p-4 border-r border-zinc-800/50 flex flex-col justify-center shrink-0 bg-zinc-900/50">
                      <div className="flex justify-between items-baseline mb-2">
                         <span className="text-[9px] font-black text-zinc-600 uppercase tracking-wider">BANCO</span>
@@ -685,7 +678,14 @@ export default function App() {
                      </div>
                      <span className="font-mono text-white font-bold tracking-tight text-sm mb-1">{m.bank.documento}</span>
                      <span className="text-[10px] text-zinc-400 truncate font-medium flex items-center gap-1" title={m.bank.depositor}>{m.bank.esInterbancaria && <Landmark size={12} className="text-amber-500"/>}{m.bank.depositor}</span>
-                     {m.nameMismatch && !m.status.includes('fraud') && !m.isInvertedOrder && !m.isStrongNameMatch && <div className="mt-2 p-2 bg-orange-900/10 border border-orange-500/20 rounded text-[9px] text-orange-400 font-bold leading-tight"><span className="flex items-center gap-1 mb-1"><AlertTriangle size={10}/> NOMBRE DIFIERE MUCHO</span></div>}
+                     
+                     {/* WARNING SPECIFIC FOR DOC MISMATCH */}
+                     {m.status === 'doc_mismatch' && (
+                        <div className="mt-2 p-2 bg-orange-900/20 border border-orange-500/30 rounded text-[9px] text-orange-400 font-bold leading-tight flex items-center gap-2">
+                            <FileX size={12} className="shrink-0"/>
+                            <span>DOC NO COINCIDE CON OCR</span>
+                        </div>
+                     )}
                   </div>
                   <div className="flex-1 p-4 flex flex-col justify-center relative">
                      {m.records.length > 0 ? (
@@ -694,13 +694,12 @@ export default function App() {
                               <div className="flex flex-col gap-0.5 w-full">
                                   <div className="flex items-center gap-2">
                                       <span className="text-[9px] font-black text-sky-700 uppercase tracking-wider">CRM MATCH</span>
-                                      {m.confidenceScore >= 90 && <span className="text-[9px] text-emerald-500 font-bold flex items-center gap-0.5 bg-emerald-950/30 px-1.5 rounded-full"><CheckCircle2 size={10}/> 100%</span>}
+                                      {m.matchType === 'documento' && <span className="text-[9px] text-emerald-500 font-bold flex items-center gap-0.5 bg-emerald-950/30 px-1.5 rounded-full"><CheckCircle2 size={10}/> DOC OK</span>}
                                       {m.records.length > 1 && <span className="text-[9px] text-violet-400 font-bold flex items-center gap-0.5 bg-violet-950/30 px-1.5 rounded-full border border-violet-500/20"><Users2 size={10}/> GRUPO DE {m.records.length}</span>}
                                   </div>
                                   <div className="flex flex-col gap-2 mt-2 w-full">
                                       {m.records.map((r, idx) => (
                                           <div key={idx} className="bg-zinc-950/40 p-2 rounded-lg border border-zinc-800/50 flex flex-col gap-1.5 relative overflow-hidden">
-                                              {m.isInvertedOrder && <div className="absolute top-0 right-0 p-1 bg-sky-500/10 rounded-bl-lg text-sky-500"><ArrowLeftRight size={10}/></div>}
                                               <div className="flex justify-between items-center pr-4">
                                                   <div className="flex flex-col">
                                                       <span className="block text-[8px] font-bold text-zinc-600 uppercase mb-0.5">NOMBRE ATLETA</span>
@@ -712,17 +711,12 @@ export default function App() {
                                                   <div><span className="block font-bold text-zinc-600 text-[8px] uppercase tracking-wider">Cédula</span><span className="font-mono text-zinc-300">{r.cedula}</span></div>
                                                   <div><span className="block font-bold text-zinc-600 text-[8px] uppercase tracking-wider">Edad</span><span className="font-mono text-zinc-300">{r.edad} años</span></div>
                                                   <div><span className="block font-bold text-zinc-600 text-[8px] uppercase tracking-wider">Valor Esp.</span><span className={`font-mono font-bold ${r.valorEsperado < 30 ? 'text-emerald-400' : 'text-zinc-300'}`}>${r.valorEsperado.toFixed(2)}</span></div>
-                                                  {r.docExtraido && <div><span className="block font-bold text-emerald-500 text-[8px] uppercase tracking-wider">OCR DETECTADO</span><span className="font-mono font-bold text-emerald-200">{r.docExtraido}</span></div>}
+                                                  {r.docExtraido && <div><span className={`block font-bold text-[8px] uppercase tracking-wider ${m.matchType === 'documento' ? 'text-emerald-500' : 'text-rose-500'}`}>OCR DETECTADO</span><span className={`font-mono font-bold ${m.matchType === 'documento' ? 'text-emerald-200' : 'text-rose-300 line-through'}`}>{r.docExtraido}</span></div>}
                                               </div>
                                           </div>
                                       ))}
                                   </div>
                               </div>
-                           </div>
-                           <div className="flex gap-2 mt-auto flex-wrap pt-2">
-                              {m.isStrongNameMatch && !m.status.includes('fraud') && <Badge type="success">IDENTIDAD CONFIRMADA</Badge>}
-                              {m.matchType === 'documento' && !m.status.includes('fraud') && <Badge type="success">DOC IDÉNTICO OCR</Badge>}
-                              {m.bank.esInterbancaria && <Badge type="warning">INTERBANCARIA</Badge>}
                            </div>
                         </>
                      ) : (
@@ -734,8 +728,11 @@ export default function App() {
                      {m.status === 'verified' ? (
                         <div className="flex flex-col items-center text-emerald-500 gap-1"><CheckCircle2 size={24}/><span className="text-[9px] font-bold">LISTO</span></div>
                      ) : m.records.length > 0 ? (
-                        <button onClick={() => confirmInCRM(m)} className={`w-full h-full rounded-lg text-[10px] font-black uppercase transition-all flex flex-col items-center justify-center leading-tight gap-1 shadow-lg active:scale-95 group-hover:scale-105 ${m.nameMismatch || m.paymentStatus === 'underpaid' ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-amber-900/20' : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/20'}`}>
-                           <Check size={20} strokeWidth={3}/><span>{m.nameMismatch || m.paymentStatus === 'underpaid' ? 'FORZAR' : 'OK'}</span>
+                        <button onClick={() => confirmInCRM(m)} className={`w-full h-full rounded-lg text-[10px] font-black uppercase transition-all flex flex-col items-center justify-center leading-tight gap-1 shadow-lg active:scale-95 group-hover:scale-105 
+                            ${m.matchType !== 'documento' || m.paymentStatus === 'underpaid' 
+                                ? 'bg-zinc-800 text-zinc-400 hover:bg-amber-600 hover:text-white border border-zinc-700' // Botón gris/ámbar si hay dudas
+                                : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/20'}`}>
+                           <Check size={20} strokeWidth={3}/><span>{m.matchType !== 'documento' || m.paymentStatus === 'underpaid' ? 'MANUAL' : 'OK'}</span>
                         </button>
                      ) : <div className="text-[9px] font-bold text-zinc-600 text-center flex flex-col items-center gap-1 opacity-50"><XCircle size={14}/> <span>MANUAL</span></div>}
                   </div>
