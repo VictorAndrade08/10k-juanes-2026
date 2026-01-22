@@ -11,7 +11,7 @@ import {
   Fingerprint, Zap, Info, CreditCard, Share2, XCircle, AlertOctagon, Hash, Calendar,
   Maximize2, Database, Image as ImageIcon, User, Wallet, FileWarning, Unlock, LogOut,
   Users, Accessibility, LayoutDashboard, ChevronRight, Check, Landmark, Tag, CheckCircle, File, ThumbsUp, Eraser,
-  Users2, Contact, BadgeAlert, ArrowLeftRight, FileSearch, CheckCheck, Play, Zap as ZapFast, FileX, Scale, HelpCircle, EyeOff, BrainCircuit, GripHorizontal, ScanEye
+  Users2, Contact, BadgeAlert, ArrowLeftRight, FileSearch, CheckCheck, Play, Zap as ZapFast, FileX, Scale, HelpCircle, EyeOff, BrainCircuit, GripHorizontal, ScanEye, Layers
 } from 'lucide-react';
 
 // --- CONFIGURACIÓN FIREBASE ---
@@ -117,6 +117,9 @@ export default function App() {
   const [isMounted, setIsMounted] = useState(false);
   const [user, setUser] = useState<FirebaseUser | null>(null);
   
+  // NUEVO: Estado para controlar la pestaña activa
+  const [activeTab, setActiveTab] = useState<'standard' | 'ghost'>('standard');
+
   const [config, setConfig] = useState({
     apiKey: (typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_AIRTABLE_API_KEY : '') || '',
     baseId: (typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID : '') || 'appA0xfrSZyNTgiLV',
@@ -362,13 +365,14 @@ export default function App() {
           matchedRecords.forEach(r => assignedIds.add(r.id));
       } 
       else if (bank.esInterbancaria) {
-          // --- LOGICA INTERBANCARIA ESPECIAL (Triangulación) ---
-          // Esta lógica se activa SOLO para interbancarias fallidas por documento.
-          // Busca coincidencia entre el MONTO del banco y los datos OCR de la FOTO.
+          // --- LOGICA INTERBANCARIA ESPECIAL (Triangulación FANTASMA) ---
+          // Esta es la parte CLAVE que pediste.
+          // Ignoramos el nombre del banco (porque no sirve).
+          // Validamos: FOTO(Nombre) == CRM(Nombre)  AND  FOTO(Monto) == BANCO(Monto)
           
           const foundByOCR = airtableRecords.find(r => {
               if (assignedIds.has(r.id)) return false;
-              // Requisito: El OCR debe haber leído algo
+              // Requisito: El OCR debe haber leído algo de la foto
               if (r.statusIA !== 'listo' || !r.montoExtraido || !r.nombreExtraido) return false;
 
               // A. Link Banco <-> Foto (Por Monto)
@@ -387,7 +391,7 @@ export default function App() {
 
           if (foundByOCR) {
               matchedRecords = [foundByOCR];
-              matchType = 'ocr_ghost'; // Tipo interno
+              matchType = 'ocr_ghost'; // Tipo interno "Fantasma"
               status = 'ocr_triangulation'; // Estado especial
               assignedIds.add(foundByOCR.id);
           }
@@ -442,7 +446,7 @@ export default function App() {
       for (const record of match.records) {
           // Etiqueta especial para Airtable según el tipo de match
           let label = 'MATCH';
-          if (match.status === 'ocr_triangulation') label = 'INTERBANCARIA (VALIDADO X FOTO)';
+          if (match.status === 'ocr_triangulation') label = 'OCR INTERBANCARIO (FOTO)';
           else if (match.matchType === 'documento') label = 'OCR DOC EXACTO';
           
           await fetch(`https://api.airtable.com/v0/${config.baseId}/${encodeURIComponent(config.tableName)}/${record.id}`, {
@@ -502,9 +506,12 @@ export default function App() {
   if (!isMounted) return null;
   if (isLocked) return <LockScreen pin={pinInput} setPin={setPinInput} error={pinError} unlock={handleUnlock} />;
 
-  // SEPARACIÓN DE LISTAS PARA UI
+  // SEPARACIÓN DE LISTAS PARA PESTAÑAS
   const regularMatches = matches.filter(m => m.status !== 'ocr_triangulation');
   const ghostMatches = matches.filter(m => m.status === 'ocr_triangulation');
+
+  // MATCHES A MOSTRAR SEGÚN PESTAÑA ACTIVA
+  const displayedMatches = activeTab === 'standard' ? regularMatches : ghostMatches;
 
   return (
     <div className="fixed inset-0 z-[100] bg-zinc-950 text-zinc-200 flex flex-col font-sans overflow-hidden">
@@ -559,7 +566,7 @@ export default function App() {
            <div className="p-4 border-b border-zinc-800 bg-zinc-900/20 flex gap-4 h-24 items-center shrink-0 z-10">
               <div className="flex-1 h-full relative group">
                   <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-zinc-600"><FileText size={16}/></div>
-                  <textarea className="w-full h-full bg-zinc-950 border border-zinc-800 rounded-xl pl-10 pr-10 p-3 text-xs font-mono text-zinc-300 resize-none focus:border-sky-500/50 focus:ring-1 focus:ring-sky-500/20 outline-none leading-tight transition-all shadow-inner" placeholder="Pega aquí el reporte del banco..." value={bankData} onChange={(e) => setBankData(e.target.value)}/>
+                  <textarea className="w-full h-full bg-zinc-950 border border-zinc-800 rounded-xl pl-10 pr-10 p-3 text-xs font-mono text-zinc-300 resize-none focus:border-sky-500/50 focus:ring-1 focus:ring-sky-900/50 outline-none leading-tight transition-all shadow-inner" placeholder="Pega aquí el reporte del banco..." value={bankData} onChange={(e) => setBankData(e.target.value)}/>
                   {bankData && <button onClick={() => setBankData("")} className="absolute top-3 right-3 text-zinc-600 hover:text-white bg-zinc-900 hover:bg-rose-500/20 rounded p-1 transition-all"><Eraser size={14}/></button>}
               </div>
               <div className="flex flex-col gap-2 h-full justify-center">
@@ -568,19 +575,40 @@ export default function App() {
               </div>
            </div>
 
+           {/* PESTAÑAS DE NAVEGACIÓN DE RESULTADOS */}
+           <div className="flex border-b border-zinc-800 bg-zinc-950 px-4 pt-4 gap-4">
+              <button 
+                onClick={() => setActiveTab('standard')} 
+                className={`pb-3 text-xs font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2 ${activeTab === 'standard' ? 'border-sky-500 text-white' : 'border-transparent text-zinc-500 hover:text-zinc-400'}`}
+              >
+                  <Layers size={14}/> Validación Normal ({regularMatches.length})
+              </button>
+              <button 
+                onClick={() => setActiveTab('ghost')} 
+                className={`pb-3 text-xs font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2 ${activeTab === 'ghost' ? 'border-violet-500 text-violet-300' : 'border-transparent text-zinc-500 hover:text-violet-400'}`}
+              >
+                  <BrainCircuit size={14}/> Interbancarias Fantasma ({ghostMatches.length})
+              </button>
+           </div>
+
            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3 bg-zinc-950">
-              {matches.length === 0 && <div className="h-full flex flex-col items-center justify-center text-zinc-800 gap-4"><LayoutDashboard size={64} strokeWidth={0.5} className="opacity-20"/><span className="text-xs font-bold uppercase tracking-widest opacity-40">Esperando datos para procesar...</span></div>}
+              {displayedMatches.length === 0 && <div className="h-full flex flex-col items-center justify-center text-zinc-800 gap-4"><LayoutDashboard size={64} strokeWidth={0.5} className="opacity-20"/><span className="text-xs font-bold uppercase tracking-widest opacity-40">No hay coincidencias en esta pestaña</span></div>}
               
-              {/* LISTA NORMAL DE MATCHES */}
-              {regularMatches.map((m, i) => (
+              {displayedMatches.map((m, i) => (
                 <div key={i} className={`flex items-stretch rounded-xl border transition-all text-sm h-auto min-h-[5rem] shadow-lg relative overflow-hidden group 
                     ${m.status === 'verified' ? 'bg-zinc-900/30 border-emerald-900/30 opacity-60' 
                     : m.status === 'fraud' ? 'bg-rose-950/10 border-rose-900/40' 
+                    : m.status === 'ocr_triangulation' ? 'bg-violet-950/10 border-violet-500/30' // Color violeta fuerte
+                    : m.status === 'manual_review' ? 'bg-yellow-950/10 border-yellow-600/40'
+                    : m.status === 'amount_match' ? 'bg-blue-950/10 border-blue-600/40'
                     : 'bg-zinc-900/80 border-zinc-800 hover:border-zinc-700'}`}>
                   
                   <div className={`w-1.5 shrink-0 
                       ${m.status === 'verified' ? 'bg-emerald-500' 
                       : m.status === 'fraud' ? 'bg-rose-500' 
+                      : m.status === 'ocr_triangulation' ? 'bg-violet-500 animate-pulse' // Barra pulsante violeta
+                      : m.status === 'manual_review' ? 'bg-yellow-500'
+                      : m.status === 'amount_match' ? 'bg-blue-500'
                       : m.isGroupPayment ? 'bg-violet-500' 
                       : m.paymentStatus === 'underpaid' ? 'bg-amber-500' 
                       : m.status === 'found' ? 'bg-sky-500' 
@@ -593,111 +621,74 @@ export default function App() {
                      </div>
                      <span className="font-mono text-white font-bold tracking-tight text-sm mb-1">{m.bank.documento}</span>
                      <span className="text-[10px] text-zinc-400 truncate font-medium flex items-center gap-1" title={m.bank.depositor}>{m.bank.esInterbancaria && <Landmark size={12} className="text-amber-500"/>}{m.bank.depositor}</span>
+                     
+                     {/* ETIQUETAS DE ESTADO */}
+                     {m.status === 'ocr_triangulation' && <div className="mt-2 p-2 bg-violet-900/20 border border-violet-500/30 rounded text-[9px] text-violet-300 font-bold leading-tight flex items-center gap-2 shadow-sm"><ScanEye size={12} className="shrink-0"/><span>MATCH FOTO &lt;-&gt; ATLETA</span></div>}
+                     {m.status === 'manual_review' && <div className="mt-2 p-2 bg-yellow-900/20 border border-yellow-500/30 rounded text-[9px] text-yellow-400 font-bold leading-tight flex items-center gap-2"><Scale size={12} className="shrink-0"/><span>POSIBLE (NOMBRE)</span></div>}
+                     {m.status === 'amount_match' && <div className="mt-2 p-2 bg-blue-900/20 border border-blue-500/30 rounded text-[9px] text-blue-400 font-bold leading-tight flex items-center gap-2"><HelpCircle size={12} className="shrink-0"/><span>POSIBLE (MONTO)</span></div>}
                   </div>
                   <div className="flex-1 p-4 flex flex-col justify-center relative">
                      {m.records.length > 0 ? (
                         <>
-                           <div className="flex justify-between items-start mb-2">
-                              <div className="flex flex-col gap-0.5 w-full">
-                                  <div className="flex items-center gap-2">
-                                      <span className="text-[9px] font-black text-sky-700 uppercase tracking-wider">CRM MATCH</span>
-                                      {m.matchType === 'documento' && <span className="text-[9px] text-emerald-500 font-bold flex items-center gap-0.5 bg-emerald-950/30 px-1.5 rounded-full"><CheckCircle2 size={10}/> DOC OK</span>}
-                                      {m.records.length > 1 && <span className="text-[9px] text-violet-400 font-bold flex items-center gap-0.5 bg-violet-950/30 px-1.5 rounded-full border border-violet-500/20"><Users2 size={10}/> GRUPO DE {m.records.length}</span>}
-                                  </div>
-                                  <div className="flex flex-col gap-2 mt-2 w-full">
-                                      {m.records.map((r, idx) => (
-                                          <div key={idx} className="bg-zinc-950/40 p-2 rounded-lg border border-zinc-800/50 flex flex-col gap-1.5 relative overflow-hidden">
-                                              <div className="flex justify-between items-center pr-4">
-                                                  <div className="flex flex-col">
-                                                      <span className="block text-[8px] font-bold text-zinc-600 uppercase mb-0.5">NOMBRE ATLETA</span>
-                                                      <span className="font-bold text-zinc-200 text-sm leading-tight flex items-center gap-2">{r.nombre}</span>
-                                                  </div>
-                                                  {r.fotoUrl && <button onClick={() => setSelectedImage(r.fotoUrl)} className="text-[9px] bg-zinc-800 px-2 py-1 rounded text-zinc-400 hover:text-white border border-transparent hover:border-zinc-600 flex items-center gap-1 uppercase font-bold tracking-wider"><Eye size={10}/> Ver Doc</button>}
-                                              </div>
-                                              <div className="grid grid-cols-4 gap-2 text-[10px] text-zinc-500 bg-zinc-900/50 p-1.5 rounded border border-zinc-800/30">
-                                                  <div><span className="block font-bold text-zinc-600 text-[8px] uppercase tracking-wider">Cédula</span><span className="font-mono text-zinc-300">{r.cedula}</span></div>
-                                                  <div><span className="block font-bold text-zinc-600 text-[8px] uppercase tracking-wider">Edad</span><span className="font-mono text-zinc-300">{r.edad} años</span></div>
-                                                  <div><span className="block font-bold text-zinc-600 text-[8px] uppercase tracking-wider">Valor Esp.</span><span className={`font-mono font-bold ${r.valorEsperado < 30 ? 'text-emerald-400' : 'text-zinc-300'}`}>${r.valorEsperado.toFixed(2)}</span></div>
-                                                  {r.docExtraido && <div><span className={`block font-bold text-[8px] uppercase tracking-wider ${m.matchType === 'documento' ? 'text-emerald-500' : 'text-rose-500'}`}>OCR DETECTADO</span><span className={`font-mono font-bold ${m.matchType === 'documento' ? 'text-emerald-200' : 'text-rose-300 line-through'}`}>{r.docExtraido}</span></div>}
-                                              </div>
+                           {m.status === 'ocr_triangulation' && (
+                               <div className="mb-2">
+                                   <span className="text-[9px] font-bold text-violet-400 uppercase tracking-wider block mb-1">DATAZO DE LA FOTO:</span>
+                               </div>
+                           )}
+                           <div className="flex flex-col gap-2 w-full">
+                              {m.records.map((r, idx) => (
+                                  <div key={idx} className={`p-2 rounded-lg border flex flex-col gap-1.5 relative overflow-hidden ${m.status === 'ocr_triangulation' ? 'bg-violet-950/20 border-violet-500/30' : 'bg-zinc-950/40 border-zinc-800/50'}`}>
+                                      <div className="flex justify-between items-center pr-4">
+                                          <div className="flex flex-col">
+                                              <span className="block text-[8px] font-bold text-zinc-600 uppercase mb-0.5">NOMBRE ATLETA</span>
+                                              <span className="font-bold text-zinc-200 text-sm leading-tight flex items-center gap-2">{r.nombre}</span>
                                           </div>
-                                      ))}
+                                          {r.fotoUrl && <button onClick={() => setSelectedImage(r.fotoUrl)} className="text-[9px] bg-zinc-800 px-2 py-1 rounded text-zinc-400 hover:text-white border border-transparent hover:border-zinc-600 flex items-center gap-1 uppercase font-bold tracking-wider"><Eye size={10}/> Ver Doc</button>}
+                                      </div>
+                                      
+                                      {/* SI ES MATCH FANTASMA, MOSTRAMOS LA EVIDENCIA */}
+                                      {m.status === 'ocr_triangulation' && (
+                                          <div className="grid grid-cols-2 gap-2 text-[9px] bg-zinc-950/50 p-1.5 rounded border border-violet-500/20 mt-1">
+                                              <div className="text-zinc-400">OCR Nombre: <span className="text-violet-300 font-bold">{r.nombreExtraido}</span></div>
+                                              <div className="text-zinc-400">OCR Monto: <span className="text-violet-300 font-bold">${r.montoExtraido}</span></div>
+                                          </div>
+                                      )}
+
+                                      {/* DATOS NORMALES */}
+                                      {m.status !== 'ocr_triangulation' && (
+                                        <div className="grid grid-cols-4 gap-2 text-[10px] text-zinc-500 bg-zinc-900/50 p-1.5 rounded border border-zinc-800/30">
+                                            <div><span className="block font-bold text-zinc-600 text-[8px] uppercase tracking-wider">Cédula</span><span className="font-mono text-zinc-300">{r.cedula}</span></div>
+                                            <div><span className="block font-bold text-zinc-600 text-[8px] uppercase tracking-wider">Edad</span><span className="font-mono text-zinc-300">{r.edad} años</span></div>
+                                            <div><span className="block font-bold text-zinc-600 text-[8px] uppercase tracking-wider">Valor Esp.</span><span className={`font-mono font-bold ${r.valorEsperado < 30 ? 'text-emerald-400' : 'text-zinc-300'}`}>${r.valorEsperado.toFixed(2)}</span></div>
+                                            {r.docExtraido && <div><span className={`block font-bold text-[8px] uppercase tracking-wider ${m.matchType === 'documento' ? 'text-emerald-500' : 'text-rose-500'}`}>OCR DETECTADO</span><span className={`font-mono font-bold ${m.matchType === 'documento' ? 'text-emerald-200' : 'text-rose-300 line-through'}`}>{r.docExtraido}</span></div>}
+                                        </div>
+                                      )}
                                   </div>
-                              </div>
+                              ))}
                            </div>
                         </>
                      ) : (
                         <div className="flex flex-col items-center justify-center h-full text-zinc-700 gap-1 opacity-50"><FileWarning size={20}/> <span className="text-[10px] font-bold">SIN COINCIDENCIA</span></div>
                      )}
-                     {m.status === 'fraud' && <div className="absolute inset-0 bg-zinc-950/80 backdrop-blur-[1px] flex items-center justify-center z-10"><div className="bg-rose-950/90 border border-rose-500/30 text-rose-200 px-4 py-2 rounded-lg font-black text-xs flex items-center gap-2 shadow-2xl"><AlertOctagon size={16} className="text-rose-500"/> <span>ALERTA DE FRAUDE: YA USADO</span></div></div>}
+                     {m.status === 'fraud' && <div className="absolute inset-0 bg-rose-950/80 backdrop-blur-[1px] flex items-center justify-center z-10"><div className="bg-rose-950/90 border border-rose-500/30 text-rose-200 px-4 py-2 rounded-lg font-black text-xs flex items-center gap-2 shadow-2xl"><AlertOctagon size={16} className="text-rose-500"/> <span>ALERTA DE FRAUDE: YA USADO</span></div></div>}
                   </div>
                   <div className="w-24 p-2 flex items-center justify-center bg-zinc-950/30 border-l border-zinc-800/50">
                      {m.status === 'verified' ? (
                         <div className="flex flex-col items-center text-emerald-500 gap-1"><CheckCircle2 size={24}/><span className="text-[9px] font-bold">LISTO</span></div>
                      ) : m.records.length > 0 ? (
                         <button onClick={() => confirmInCRM(m)} className={`w-full h-full rounded-lg text-[10px] font-black uppercase transition-all flex flex-col items-center justify-center leading-tight gap-1 shadow-lg active:scale-95 group-hover:scale-105 
-                            ${m.paymentStatus === 'underpaid' ? 'bg-amber-600 hover:bg-amber-500' : 'bg-emerald-600 hover:bg-emerald-500'} text-white shadow-emerald-900/20`}>
-                           <Check size={20} strokeWidth={3}/><span>{m.paymentStatus === 'underpaid' ? 'MANUAL' : 'OK'}</span>
+                            ${m.status === 'ocr_triangulation' 
+                                ? 'bg-violet-600 hover:bg-violet-500 text-white shadow-violet-900/20' // Botón VIOLETA para los fantasmas
+                                : m.paymentStatus === 'underpaid' 
+                                    ? 'bg-amber-600 hover:bg-amber-500' 
+                                    : 'bg-emerald-600 hover:bg-emerald-500'} text-white shadow-emerald-900/20`}>
+                           {m.status === 'ocr_triangulation' ? <GripHorizontal size={20}/> : <Check size={20} strokeWidth={3}/>}
+                           <span>{m.status === 'ocr_triangulation' ? 'CONFIRMAR' : (m.paymentStatus === 'underpaid' ? 'MANUAL' : 'OK')}</span>
                         </button>
                      ) : <div className="text-[9px] font-bold text-zinc-600 text-center flex flex-col items-center gap-1 opacity-50"><XCircle size={14}/> <span>MANUAL</span></div>}
                   </div>
                 </div>
               ))}
-
-              {/* SECCIÓN ESPECIAL: INTERBANCARIAS FANTASMA (OCR TRIANGULATION) */}
-              {ghostMatches.length > 0 && (
-                  <div className="mt-8 mb-4 border-t-2 border-violet-500/30 pt-6 pb-2 relative">
-                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-zinc-950 px-6 text-violet-400 font-black text-xs uppercase tracking-widest flex items-center gap-2 border border-violet-500/30 rounded-full py-1.5 shadow-[0_0_20px_rgba(139,92,246,0.3)]">
-                          <ScanEye size={16}/> POSIBLES INTERBANCARIAS DETECTADAS (OCR)
-                      </div>
-                      
-                      {ghostMatches.map((m, i) => (
-                        <div key={`ghost-${i}`} className="flex items-stretch rounded-xl border border-violet-500/30 bg-violet-950/5 mb-3 transition-all text-sm h-auto min-h-[5rem] shadow-lg relative overflow-hidden group hover:border-violet-500/60">
-                            <div className="w-1.5 shrink-0 bg-violet-500 animate-pulse"></div>
-                            
-                            {/* BANCO */}
-                            <div className="w-[240px] p-4 border-r border-violet-500/20 flex flex-col justify-center shrink-0">
-                                <div className="flex justify-between items-baseline mb-2">
-                                    <span className="text-[9px] font-black text-violet-400 uppercase tracking-wider">BANCO (INTERB)</span>
-                                    <span className="font-mono font-bold text-sm text-white">${m.bank.monto.toFixed(2)}</span>
-                                </div>
-                                <span className="font-mono text-zinc-500 font-bold tracking-tight text-xs mb-1 line-through opacity-50">{m.bank.documento}</span>
-                                <span className="text-[10px] text-zinc-400 truncate font-medium flex items-center gap-1"><Landmark size={12} className="text-violet-500"/> Sin Nombre Válido</span>
-                            </div>
-
-                            {/* FOTO MATCH */}
-                            <div className="flex-1 p-4 flex flex-col justify-center relative">
-                                <div className="flex items-center gap-2 mb-3">
-                                    <span className="text-[9px] bg-violet-500 text-white px-2 py-0.5 rounded font-bold uppercase tracking-wider shadow-lg shadow-violet-500/20 flex items-center gap-1"><BrainCircuit size={10}/> COINCIDENCIA POR FOTO</span>
-                                </div>
-                                {m.records.map((r, idx) => (
-                                    <div key={idx} className="bg-zinc-950/60 p-2.5 rounded-lg border border-violet-500/30 flex justify-between items-center group-hover:bg-zinc-950/80 transition-colors">
-                                        <div>
-                                            <span className="block text-[11px] font-bold text-white uppercase mb-0.5">{r.nombre}</span>
-                                            <span className="text-[9px] text-zinc-400 font-mono flex items-center gap-2">
-                                                <span>OCR Nombre: <span className="text-violet-300">{r.nombreExtraido}</span></span>
-                                                <span>OCR Monto: <span className="text-violet-300">${r.montoExtraido}</span></span>
-                                            </span>
-                                        </div>
-                                        {r.fotoUrl && <button onClick={() => setSelectedImage(r.fotoUrl)} className="text-[9px] bg-zinc-800 px-3 py-1.5 rounded text-violet-300 hover:text-white border border-transparent hover:border-violet-500/50 flex items-center gap-1 uppercase font-bold tracking-wider transition-all"><Eye size={12}/> VER FOTO</button>}
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* ACCION */}
-                            <div className="w-24 p-2 flex items-center justify-center bg-violet-950/10 border-l border-violet-500/20">
-                                {m.status === 'verified' ? (
-                                    <div className="flex flex-col items-center gap-1 text-emerald-500"><CheckCircle2 size={24}/><span className="text-[9px] font-bold">LISTO</span></div>
-                                ) : (
-                                    <button onClick={() => confirmInCRM(m)} className="w-full h-full rounded-lg text-[10px] font-black uppercase transition-all flex flex-col items-center justify-center leading-tight gap-1 shadow-lg active:scale-95 bg-violet-600 hover:bg-violet-500 text-white shadow-violet-900/30">
-                                        <GripHorizontal size={20}/><span>CONFIRMAR</span>
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                      ))}
-                  </div>
-              )}
            </div>
         </div>
 
