@@ -11,7 +11,7 @@ import {
   Fingerprint, Zap, Info, CreditCard, Share2, XCircle, AlertOctagon, Hash, Calendar,
   Maximize2, Database, Image as ImageIcon, User, Wallet, FileWarning, Unlock, LogOut,
   Users, Accessibility, LayoutDashboard, ChevronRight, Check, Landmark, Tag, CheckCircle, File, ThumbsUp, Eraser,
-  Users2, Contact, BadgeAlert, ArrowLeftRight, FileSearch, CheckCheck, Play, Zap as ZapFast, FileX, Scale, HelpCircle, EyeOff, BrainCircuit, GripHorizontal, ScanEye, Layers
+  Users2, Contact, BadgeAlert, ArrowLeftRight, FileSearch, CheckCheck, Play, Zap as ZapFast, FileX, Scale, HelpCircle, EyeOff, BrainCircuit, GripHorizontal, ScanEye, Layers, Ghost, ListFilter
 } from 'lucide-react';
 
 // --- CONFIGURACIÓN FIREBASE ---
@@ -110,6 +110,13 @@ const areDocsStrictlyEqual = (ocrDoc: string | null, bankDoc: string) => {
 
 const normalizeText = (text: string) => text ? text.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9]/g, " ").replace(/\s+/g, " ").trim() : "";
 
+const parseMontoIA = (val: any) => {
+    if (typeof val === 'number') return val;
+    if (!val) return 0;
+    const str = String(val).replace('$', '').replace(',', '.').replace(/[^\d.]/g, '');
+    return parseFloat(str) || 0;
+};
+
 export default function App() {
   const [isLocked, setIsLocked] = useState(true);
   const [pinInput, setPinInput] = useState("");
@@ -117,7 +124,7 @@ export default function App() {
   const [isMounted, setIsMounted] = useState(false);
   const [user, setUser] = useState<FirebaseUser | null>(null);
   
-  // NUEVO: Estado para controlar la pestaña activa
+  // PESTAÑAS: 'standard' (Match directo) | 'ghost' (Triangulación OCR Interbancaria)
   const [activeTab, setActiveTab] = useState<'standard' | 'ghost'>('standard');
 
   const [config, setConfig] = useState({
@@ -227,7 +234,6 @@ export default function App() {
       let allRecords: any[] = [];
       let offset = null;
 
-      // CARGA PAGINADA (TODOS LOS ATLETAS)
       do {
          const offsetParam: string = offset ? `&offset=${offset}` : '';
          const url = `https://api.airtable.com/v0/${config.baseId}/${encodeURIComponent(config.tableName)}?filterByFormula=${encodeURIComponent(`{Etapa}='${config.filterStage}'`)}${offsetParam}`;
@@ -258,7 +264,7 @@ export default function App() {
           tipoComprobante: null,
           statusIA: 'pendiente'
         })));
-        showStatus('success', `${allRecords.length} atletas cargados (Lista Completa).`);
+        showStatus('success', `${allRecords.length} atletas cargados.`);
       }
     } catch (e) { 
         console.error(e);
@@ -294,11 +300,13 @@ export default function App() {
       const json = JSON.parse(text || "{}");
       
       const docId = json.documento ? String(json.documento).replace(/\D/g, '') : null;
+      // PARSEAR MONTO CORRECTAMENTE
+      const montoClean = parseMontoIA(json.monto);
       
       setAirtableRecords(prev => prev.map(r => r.id === record.id ? { 
           ...r, 
           docExtraido: docId, 
-          montoExtraido: json.monto, 
+          montoExtraido: montoClean, 
           nombreExtraido: json.nombre ? String(json.nombre).toUpperCase() : null, 
           tipoComprobante: json.tipo || 'DIGITAL', 
           statusIA: docId ? 'listo' : 'error' 
@@ -328,29 +336,69 @@ export default function App() {
   const processMatches = () => {
     if (!bankData.trim()) return showStatus('error', 'Faltan datos del banco.');
 
-    const regex = /(\d{2}[\/\-]\d{2}[\/\-]\d{4})\s+(\d{4,20})\s+([A-Z0-9\s]+)/g;
+    // --- PARSER DE BANCO MEJORADO PARA EL FORMATO ESPECIFICO ---
+    // El reporte del usuario tiene: AG. NORTE ... CODIGO ... DESCRIPCION CON SALTOS ... C ... MONTO ... SALDO ... FECHA
+    // Usamos una regex que trague los saltos de línea en la descripción.
+    
+    // 1. Normalizar saltos de línea para que sea un solo string largo si es necesario, o procesar bloques.
+    // Estrategia: Buscar el patrón "AG." y capturar hasta la "C" y el monto.
+    
+    const regex = /(AG\.|OFICINA)[\s\S]+?(\d{6,})\s+([\s\S]+?)\s+C\s+(\d{1,5}[.,]\d{2})/g;
+    
     let match;
     const bankEntries = [];
-    const normalizedData = bankData.replace(/\r\n/g, '\n');
+    
+    // Normalizamos el texto de entrada para facilitar el regex
+    // Eliminamos multiples espacios pero mantenemos la estructura general
+    const rawData = bankData; 
 
-    while ((match = regex.exec(normalizedData)) !== null) {
-      const docNum = match[2];
-      const lineEnd = normalizedData.indexOf('\n', match.index);
-      const lineStart = normalizedData.lastIndexOf('\n', match.index);
-      const fullLine = normalizedData.substring(lineStart + 1, lineEnd !== -1 ? lineEnd : undefined);
+    while ((match = regex.exec(rawData)) !== null) {
+      const docNum = match[2]; // El numero de documento
       
-      let depositor = fullLine.replace(/TRANSFERENC.*?DE\s+|DEP\s+CNB\s+|CONST\.\s+RECAUDACION\s+/i, '').replace(/[\d\/]/g, '').trim();
-      const amountMatch = fullLine.match(/(\d{1,4}[.,]\d{2})(?!\d)/);
-      let monto = 0; if (amountMatch) monto = parseFloat(amountMatch[0].replace(',', '.'));
-      const esInterbancaria = /INTERB|SPI|OTROS BANCOS|TRANSF\.|BCE|EN LINEA|ONLINE|TRANSFERENCIA/i.test(fullLine);
+      // Limpieza de la descripcion (quitar saltos de linea)
+      const rawDesc = match[3].replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+      const depositor = rawDesc.replace(/TRANSFERENC.*?DE\s+|DEP\s+CNB\s+|CONST\.\s+RECAUDACION\s+/i, '').trim();
+      
+      const montoStr = match[4].replace(',', '.');
+      const monto = parseFloat(montoStr);
+      
+      // Detección de interbancaria
+      const esInterbancaria = /INTERB|SPI|OTROS BANCOS|TRANSF\.|BCE|EN LINEA|ONLINE|TRANSFERENCIA/i.test(rawDesc);
 
-      if (monto > 0) bankEntries.push({ documento: docNum, monto, depositor, esInterbancaria, esDuplicadoBanco: false });
+      if (monto > 0) {
+          bankEntries.push({ 
+              documento: docNum, 
+              monto, 
+              depositor, 
+              esInterbancaria, 
+              esDuplicadoBanco: false 
+          });
+      }
+    }
+
+    // --- FALLBACK SI EL REGEX NO CAPTURA (Por si el formato varia ligeramente) ---
+    if (bankEntries.length === 0) {
+        // Intento linea por linea simplificado
+        const lines = bankData.split('\n');
+        lines.forEach(l => {
+            // Busca Documento (6+ digitos) ... C ... Monto
+            const m = l.match(/(\d{6,}).*?C\s+(\d+[.,]\d{2})/);
+            if(m) {
+                bankEntries.push({
+                    documento: m[1],
+                    monto: parseFloat(m[2].replace(',', '.')),
+                    depositor: l.substring(0, 50), // Fallback nombre
+                    esInterbancaria: true,
+                    esDuplicadoBanco: false
+                });
+            }
+        });
     }
 
     const assignedIds = new Set();
     
     const newMatches = bankEntries.map(bank => {
-      // 1. MATCH DOCUMENTO (Prioridad Máxima)
+      // 1. MATCH DOCUMENTO (Prioridad Máxima - Tab Directo)
       let matchedRecords = airtableRecords.filter(r => {
           if(!r.docExtraido) return false;
           return areDocsStrictlyEqual(r.docExtraido, bank.documento);
@@ -364,36 +412,54 @@ export default function App() {
           status = 'found';
           matchedRecords.forEach(r => assignedIds.add(r.id));
       } 
-      else if (bank.esInterbancaria) {
-          // --- LOGICA INTERBANCARIA ESPECIAL (Triangulación FANTASMA) ---
-          // Esta es la parte CLAVE que pediste.
-          // Ignoramos el nombre del banco (porque no sirve).
-          // Validamos: FOTO(Nombre) == CRM(Nombre)  AND  FOTO(Monto) == BANCO(Monto)
+      else {
+          // --- LOGICA DE TRIANGULACIÓN (INTERBANCARIA FANTASMA) ---
+          // Esta lógica se activa SIEMPRE si falla el documento.
+          // Busca coincidencia entre:
+          // 1. Monto del Banco == Monto leído en la FOTO (OCR)
+          // 2. Nombre en la FOTO == Nombre del Atleta en Airtable
           
           const foundByOCR = airtableRecords.find(r => {
               if (assignedIds.has(r.id)) return false;
               // Requisito: El OCR debe haber leído algo de la foto
               if (r.statusIA !== 'listo' || !r.montoExtraido || !r.nombreExtraido) return false;
 
-              // A. Link Banco <-> Foto (Por Monto)
+              // A. Link Banco <-> Foto (Por Monto - Tolerancia 0.10c)
               const amountMatch = Math.abs(r.montoExtraido - bank.monto) < 0.1;
               
               // B. Link Foto <-> Atleta (Por Nombre)
-              // Aquí verificamos que la foto pertenezca a la persona, aunque el banco no traiga nombre.
               const ocrName = normalizeText(r.nombreExtraido);
               const crmName = normalizeText(r.nombre);
               const crmParts = crmName.split(/\s+/).filter(p => p.length > 2);
               
-              const photoMatchesAtleta = crmParts.some(part => ocrName.includes(part));
+              // Al menos una parte del nombre debe coincidir entre la foto y el registro
+              const identityVerified = crmParts.some(part => ocrName.includes(part));
 
-              return amountMatch && photoMatchesAtleta;
+              return amountMatch && identityVerified;
           });
 
           if (foundByOCR) {
               matchedRecords = [foundByOCR];
-              matchType = 'ocr_ghost'; // Tipo interno "Fantasma"
-              status = 'ocr_triangulation'; // Estado especial
+              matchType = 'ocr_ghost'; 
+              status = 'ocr_triangulation'; // Irá a la pestaña de "Interbancarias Fantasma"
               assignedIds.add(foundByOCR.id);
+          } else {
+             // Si falla OCR, intentamos por nombre del banco (si existe)
+             const foundByName = airtableRecords.find(r => {
+                 if (assignedIds.has(r.id)) return false;
+                 const bankParts = normalizeText(bank.depositor).split(/\s+/).filter(p => p.length > 3);
+                 if(bankParts.length === 0) return false;
+                 const crmName = normalizeText(r.nombre);
+                 let hits = 0;
+                 bankParts.forEach(p => { if(crmName.includes(p)) hits++; });
+                 return hits >= 1;
+             });
+             
+             if(foundByName) {
+                 matchedRecords = [foundByName];
+                 matchType = 'nombre_only';
+                 status = 'manual_review';
+             }
           }
       }
 
@@ -430,7 +496,7 @@ export default function App() {
 
     setMatches(newMatches as any);
     if (newMatches.length > 0) showStatus('success', `Procesadas ${newMatches.length} filas.`);
-    else showStatus('error', 'Sin datos.');
+    else showStatus('error', 'Sin datos detectados en el texto.');
   };
 
   const confirmInCRM = async (match: any) => {
@@ -444,9 +510,8 @@ export default function App() {
       if (docSnap.exists() && !match.isGroupPayment) { showStatus('error', 'FRAUDE: Doc usado.'); setLoading(false); return; }
 
       for (const record of match.records) {
-          // Etiqueta especial para Airtable según el tipo de match
           let label = 'MATCH';
-          if (match.status === 'ocr_triangulation') label = 'OCR INTERBANCARIO (FOTO)';
+          if (match.status === 'ocr_triangulation') label = 'INTERBANCARIA (VALIDADO X FOTO)';
           else if (match.matchType === 'documento') label = 'OCR DOC EXACTO';
           
           await fetch(`https://api.airtable.com/v0/${config.baseId}/${encodeURIComponent(config.tableName)}/${record.id}`, {
@@ -507,8 +572,8 @@ export default function App() {
   if (isLocked) return <LockScreen pin={pinInput} setPin={setPinInput} error={pinError} unlock={handleUnlock} />;
 
   // SEPARACIÓN DE LISTAS PARA PESTAÑAS
-  const regularMatches = matches.filter(m => m.status !== 'ocr_triangulation');
-  const ghostMatches = matches.filter(m => m.status === 'ocr_triangulation');
+  const regularMatches = matches.filter(m => m.status !== 'ocr_triangulation' && m.status !== 'amount_match');
+  const ghostMatches = matches.filter(m => m.status === 'ocr_triangulation' || m.status === 'amount_match');
 
   // MATCHES A MOSTRAR SEGÚN PESTAÑA ACTIVA
   const displayedMatches = activeTab === 'standard' ? regularMatches : ghostMatches;
@@ -575,19 +640,19 @@ export default function App() {
               </div>
            </div>
 
-           {/* PESTAÑAS DE NAVEGACIÓN DE RESULTADOS */}
-           <div className="flex border-b border-zinc-800 bg-zinc-950 px-4 pt-4 gap-4">
+           {/* --- PESTAÑAS PARA SEPARAR INTERBANCARIAS FANTASMA --- */}
+           <div className="flex border-b border-zinc-800 bg-zinc-950 px-4 pt-4 gap-6">
               <button 
                 onClick={() => setActiveTab('standard')} 
-                className={`pb-3 text-xs font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2 ${activeTab === 'standard' ? 'border-sky-500 text-white' : 'border-transparent text-zinc-500 hover:text-zinc-400'}`}
+                className={`pb-3 text-[11px] font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2 ${activeTab === 'standard' ? 'border-sky-500 text-white' : 'border-transparent text-zinc-500 hover:text-zinc-400'}`}
               >
-                  <Layers size={14}/> Validación Normal ({regularMatches.length})
+                  <Layers size={14}/> DIRECTOS (PICHINCHA) <span className="bg-zinc-800 px-1.5 rounded text-[9px] text-zinc-400">{regularMatches.length}</span>
               </button>
               <button 
                 onClick={() => setActiveTab('ghost')} 
-                className={`pb-3 text-xs font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2 ${activeTab === 'ghost' ? 'border-violet-500 text-violet-300' : 'border-transparent text-zinc-500 hover:text-violet-400'}`}
+                className={`pb-3 text-[11px] font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2 ${activeTab === 'ghost' ? 'border-violet-500 text-violet-300' : 'border-transparent text-zinc-500 hover:text-violet-400'}`}
               >
-                  <BrainCircuit size={14}/> Interbancarias Fantasma ({ghostMatches.length})
+                  <BrainCircuit size={14}/> INTERBANCARIAS (OCR) <span className={`px-1.5 rounded text-[9px] font-bold ${ghostMatches.length > 0 ? 'bg-violet-500 text-white animate-pulse' : 'bg-zinc-800 text-zinc-400'}`}>{ghostMatches.length}</span>
               </button>
            </div>
 
@@ -598,7 +663,7 @@ export default function App() {
                 <div key={i} className={`flex items-stretch rounded-xl border transition-all text-sm h-auto min-h-[5rem] shadow-lg relative overflow-hidden group 
                     ${m.status === 'verified' ? 'bg-zinc-900/30 border-emerald-900/30 opacity-60' 
                     : m.status === 'fraud' ? 'bg-rose-950/10 border-rose-900/40' 
-                    : m.status === 'ocr_triangulation' ? 'bg-violet-950/10 border-violet-500/30' // Color violeta fuerte
+                    : m.status === 'ocr_triangulation' ? 'bg-violet-950/10 border-violet-500/30' // Estilo especial VIOLETA
                     : m.status === 'manual_review' ? 'bg-yellow-950/10 border-yellow-600/40'
                     : m.status === 'amount_match' ? 'bg-blue-950/10 border-blue-600/40'
                     : 'bg-zinc-900/80 border-zinc-800 hover:border-zinc-700'}`}>
@@ -606,7 +671,7 @@ export default function App() {
                   <div className={`w-1.5 shrink-0 
                       ${m.status === 'verified' ? 'bg-emerald-500' 
                       : m.status === 'fraud' ? 'bg-rose-500' 
-                      : m.status === 'ocr_triangulation' ? 'bg-violet-500 animate-pulse' // Barra pulsante violeta
+                      : m.status === 'ocr_triangulation' ? 'bg-violet-500 animate-pulse' // Barra Violeta
                       : m.status === 'manual_review' ? 'bg-yellow-500'
                       : m.status === 'amount_match' ? 'bg-blue-500'
                       : m.isGroupPayment ? 'bg-violet-500' 
@@ -637,7 +702,7 @@ export default function App() {
                            )}
                            <div className="flex flex-col gap-2 w-full">
                               {m.records.map((r, idx) => (
-                                  <div key={idx} className={`p-2 rounded-lg border flex flex-col gap-1.5 relative overflow-hidden ${m.status === 'ocr_triangulation' ? 'bg-violet-950/20 border-violet-500/30' : 'bg-zinc-950/40 border-zinc-800/50'}`}>
+                                  <div key={idx} className={`p-2 rounded-lg border flex flex-col gap-1.5 relative overflow-hidden ${m.status === 'ocr_triangulation' ? 'bg-zinc-950/60 border-violet-500/30' : 'bg-zinc-950/40 border-zinc-800/50'}`}>
                                       <div className="flex justify-between items-center pr-4">
                                           <div className="flex flex-col">
                                               <span className="block text-[8px] font-bold text-zinc-600 uppercase mb-0.5">NOMBRE ATLETA</span>
