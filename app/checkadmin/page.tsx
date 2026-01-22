@@ -11,7 +11,7 @@ import {
   Fingerprint, Zap, Info, CreditCard, Share2, XCircle, AlertOctagon, Hash, Calendar,
   Maximize2, Database, Image as ImageIcon, User, Wallet, FileWarning, Unlock, LogOut,
   Users, Accessibility, LayoutDashboard, ChevronRight, Check, Landmark, Tag, CheckCircle, File, ThumbsUp, Eraser,
-  Users2, Contact, BadgeAlert, ArrowLeftRight, FileSearch, CheckCheck, Play, Zap as ZapFast, FileX
+  Users2, Contact, BadgeAlert, ArrowLeftRight, FileSearch, CheckCheck, Play, Zap as ZapFast, FileX, Scale, HelpCircle, EyeOff, BrainCircuit, GripHorizontal, ScanEye
 } from 'lucide-react';
 
 // --- CONFIGURACIÓN FIREBASE ---
@@ -81,8 +81,8 @@ interface MatchResult {
     esInterbancaria: boolean;
   };
   records: Record[];
-  status: 'found' | 'missing' | 'fraud' | 'verified' | 'reused' | 'doc_mismatch';
-  matchType: 'documento' | 'nombre_only' | 'none'; // nombre_only es ahora un warning
+  status: 'found' | 'missing' | 'fraud' | 'verified' | 'reused' | 'doc_mismatch' | 'manual_review' | 'amount_match' | 'ocr_triangulation';
+  matchType: 'documento' | 'nombre_only' | 'monto_only' | 'ocr_ghost' | 'none'; 
   claimedBy?: string;
   nameMismatch: boolean;
   isFamily: boolean;
@@ -95,24 +95,20 @@ interface MatchResult {
   isStrongNameMatch: boolean;
 }
 
-// --- NORMALIZACIÓN ESTRICTA (REGLA #1) ---
+// --- NORMALIZACIÓN ---
 const cleanDocNumber = (doc: string | number | null) => {
     if (!doc) return "";
-    // Elimina letras, espacios, guiones y ceros a la izquierda
-    // "REF: 00012345" -> "12345"
     return String(doc).replace(/\D/g, '').replace(/^0+/, '');
 };
 
 const areDocsStrictlyEqual = (ocrDoc: string | null, bankDoc: string) => {
     const cleanOCR = cleanDocNumber(ocrDoc);
     const cleanBank = cleanDocNumber(bankDoc);
-    
     if (!cleanOCR || !cleanBank) return false;
-    
-    // El Banco suele tener mas ceros o digitos extra, o el OCR lee menos.
-    // Match si son idénticos o si uno termina con el otro (sufijo).
     return cleanOCR === cleanBank || cleanBank.endsWith(cleanOCR) || cleanOCR.endsWith(cleanBank);
 };
+
+const normalizeText = (text: string) => text ? text.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9]/g, " ").replace(/\s+/g, " ").trim() : "";
 
 export default function App() {
   const [isLocked, setIsLocked] = useState(true);
@@ -165,16 +161,8 @@ export default function App() {
     if (!auth) return;
     const initAuth = async () => {
       try {
-        // @ts-ignore
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          // @ts-ignore
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
-      } catch (err) {
-        console.error("Auth Error:", err);
-      }
+        await signInAnonymously(auth);
+      } catch (err) { console.error("Auth Error:", err); }
     };
     initAuth();
     const unsubscribe = onAuthStateChanged(auth, setUser);
@@ -215,8 +203,6 @@ export default function App() {
   const showStatus = (type: 'success' | 'error', message: string) => { setStatus({ type, message }); setTimeout(() => setStatus({ type: '', message: '' }), 4000); };
   const saveConfig = (e: React.FormEvent) => { e.preventDefault(); localStorage.setItem(AIRTABLE_CONFIG_KEY, JSON.stringify(config)); setIsConfigOpen(false); showStatus('success', 'Configuración guardada.'); };
   
-  const normalizeText = (text: string) => text.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9]/g, " ").replace(/\s+/g, " ").trim();
-
   const urlToBase64 = async (url: string) => {
     try {
       const response = await fetch(url, { mode: 'cors' }).catch(() => null);
@@ -235,11 +221,25 @@ export default function App() {
     if (!config.apiKey) return setIsConfigOpen(true);
     setLoading(true);
     try {
-      const url = `https://api.airtable.com/v0/${config.baseId}/${encodeURIComponent(config.tableName)}?filterByFormula=${encodeURIComponent(`{Etapa}='${config.filterStage}'`)}`;
-      const response = await fetch(url, { headers: { Authorization: `Bearer ${config.apiKey}` } });
-      const data = await response.json();
-      if (data.records) {
-        setAirtableRecords(data.records.map((r: any) => ({
+      let allRecords: any[] = [];
+      let offset = null;
+
+      // CARGA PAGINADA (TODOS LOS ATLETAS)
+      do {
+         const offsetParam: string = offset ? `&offset=${offset}` : '';
+         const url = `https://api.airtable.com/v0/${config.baseId}/${encodeURIComponent(config.tableName)}?filterByFormula=${encodeURIComponent(`{Etapa}='${config.filterStage}'`)}${offsetParam}`;
+         
+         const response = await fetch(url, { headers: { Authorization: `Bearer ${config.apiKey}` } });
+         const data = await response.json();
+         
+         if (data.records) {
+             allRecords = [...allRecords, ...data.records];
+         }
+         offset = data.offset;
+      } while (offset);
+
+      if (allRecords.length > 0) {
+        setAirtableRecords(allRecords.map((r: any) => ({
           id: r.id,
           nombre: r.fields['nombre'] || 'DESCONOCIDO',
           cedula: r.fields['cedula'] || 'S/N',
@@ -255,9 +255,14 @@ export default function App() {
           tipoComprobante: null,
           statusIA: 'pendiente'
         })));
-        showStatus('success', `${data.records.length} atletas cargados.`);
+        showStatus('success', `${allRecords.length} atletas cargados (Lista Completa).`);
       }
-    } catch (e) { showStatus('error', 'Error Airtable.'); } finally { setLoading(false); }
+    } catch (e) { 
+        console.error(e);
+        showStatus('error', 'Error conectando con Airtable.'); 
+    } finally { 
+        setLoading(false); 
+    }
   };
 
   const scanReceiptIA = async (record: Record) => {
@@ -271,14 +276,11 @@ export default function App() {
       const imageData = await urlToBase64(record.fotoUrl);
       if (!imageData) throw new Error("CORS");
       
-      const prompt = `Extrae datos de este comprobante bancario.
-      IMPORTANTE: El Número de Documento es lo más crítico.
-      
-      1. DOCUMENTO: Busca "Ref:", "Secuencial", "Documento", "Control". Extrae SOLO NÚMEROS.
-      2. MONTO: Valor total.
-      3. NOMBRE: Quién transfiere.
-      
-      Output JSON: {"documento": "12345", "monto": 30.00, "nombre": "JUAN"}`;
+      const prompt = `Extrae datos del comprobante.
+      1. DOCUMENTO: Número de referencia/control (solo dígitos).
+      2. MONTO: Valor total pagado.
+      3. NOMBRE: Nombre del ordenante/depositante.
+      JSON Output: {"documento": "12345", "monto": 30.00, "nombre": "VICTOR HUGO"}`;
 
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_KEY}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -345,99 +347,71 @@ export default function App() {
     const assignedIds = new Set();
     
     const newMatches = bankEntries.map(bank => {
-      // ----------------------------------------------------
-      // REGLA 1: BUSQUEDA POR DOCUMENTO (ESTRICTA NORMALIZADA)
-      // ----------------------------------------------------
-      const matchedRecords = airtableRecords.filter(r => {
+      // 1. MATCH DOCUMENTO (Prioridad Máxima)
+      let matchedRecords = airtableRecords.filter(r => {
           if(!r.docExtraido) return false;
           return areDocsStrictlyEqual(r.docExtraido, bank.documento);
       });
       
-      let matchType: 'documento' | 'nombre_only' | 'none' = 'none';
+      let matchType: MatchResult['matchType'] = 'none';
       let status: MatchResult['status'] = 'missing';
 
-      // SI HAY MATCH DE DOCUMENTO -> ES UN "FOUND"
       if (matchedRecords.length > 0) {
           matchType = 'documento';
           status = 'found';
           matchedRecords.forEach(r => assignedIds.add(r.id));
       } 
-      else {
-          // ----------------------------------------------------
-          // REGLA 2: FALLBACK POR NOMBRE PERO SIN VALIDAR (SOLO AVISO)
-          // ----------------------------------------------------
-          const foundByName = airtableRecords.find(r => {
-             if (assignedIds.has(r.id)) return false;
-             const bankNameParts = normalizeText(bank.depositor).split(/\s+/).filter(p => p.length > 1);
-             if (bankNameParts.length === 0) return false;
-             const crmNameNorm = normalizeText(r.nombre);
-             const crmNameParts = crmNameNorm.split(/\s+/).filter(p => p.length > 1);
-             
-             let matchCount = 0;
-             bankNameParts.forEach(bPart => {
-                 if (crmNameParts.some(cPart => cPart === bPart || cPart.includes(bPart) || bPart.includes(cPart))) matchCount++;
-             });
-             return matchCount >= 2; // Match fuerte de nombre
-          });
+      else if (bank.esInterbancaria) {
+          // --- LOGICA INTERBANCARIA ESPECIAL (Triangulación) ---
+          // Esta lógica se activa SOLO para interbancarias fallidas por documento.
+          // Busca coincidencia entre el MONTO del banco y los datos OCR de la FOTO.
           
-          if (foundByName) {
-              // ENCONTRAMOS LA PERSONA, PERO EL DOC NO COINCIDE
-              matchedRecords.push(foundByName);
-              matchType = 'nombre_only';
-              status = 'doc_mismatch'; // ESTADO ESPECIAL: NO COINCIDE DOC
+          const foundByOCR = airtableRecords.find(r => {
+              if (assignedIds.has(r.id)) return false;
+              // Requisito: El OCR debe haber leído algo
+              if (r.statusIA !== 'listo' || !r.montoExtraido || !r.nombreExtraido) return false;
+
+              // A. Link Banco <-> Foto (Por Monto)
+              const amountMatch = Math.abs(r.montoExtraido - bank.monto) < 0.1;
+              
+              // B. Link Foto <-> Atleta (Por Nombre)
+              // Aquí verificamos que la foto pertenezca a la persona, aunque el banco no traiga nombre.
+              const ocrName = normalizeText(r.nombreExtraido);
+              const crmName = normalizeText(r.nombre);
+              const crmParts = crmName.split(/\s+/).filter(p => p.length > 2);
+              
+              const photoMatchesAtleta = crmParts.some(part => ocrName.includes(part));
+
+              return amountMatch && photoMatchesAtleta;
+          });
+
+          if (foundByOCR) {
+              matchedRecords = [foundByOCR];
+              matchType = 'ocr_ghost'; // Tipo interno
+              status = 'ocr_triangulation'; // Estado especial
+              assignedIds.add(foundByOCR.id);
           }
       }
 
-      // ----------------------------------------------------
-      // REGLA 3: VERIFICACIÓN DE FRAUDE (HISTÓRICO)
-      // ----------------------------------------------------
+      // 3. CHECK FRAUDE
       const cleanBankDoc = cleanDocNumber(bank.documento);
       const historical = historicalDocs[cleanBankDoc];
-
       if (historical) {
           status = 'fraud';
-          // Excepción: Pagos grupales reales permitidos si el monto del banco cubre a todos
           if (matchType === 'documento' && matchedRecords.length > 1) {
              const totalExpected = matchedRecords.reduce((s, r) => s + r.valorEsperado, 0);
-             if (bank.monto >= totalExpected - 1) status = 'reused'; // Es un reuso válido (grupo)
+             if (bank.monto >= totalExpected - 1) status = 'reused'; 
           }
       }
 
-      // CALCULOS DE SEGURIDAD
       let nameMismatch = false;
-      let isFamily = false;
-      let confidence = 0;
       let paymentStatus: 'correct' | 'underpaid' | 'overpaid' = 'correct';
       let isGroupPayment = false;
-      let estimatedPeople = 1;
       let totalExpectedValue = 0;
 
       if (matchedRecords.length > 0) {
-         // Validar nombre aunque sea match por documento (para detectar familias)
-         const record = matchedRecords[0]; 
-         const crmName = normalizeText(record.nombre);
-         const bankName = normalizeText(bank.depositor);
-         
-         const isNameSimilar = crmName.split(' ').filter(p => p.length>2).some(p => bankName.includes(p));
-         
-         if (matchType === 'documento') {
-             confidence = 100;
-             if (!isNameSimilar) {
-                 nameMismatch = true;
-                 isFamily = true; // Doc coincide, nombre no -> Familiar
-             }
-         } else {
-             // Es nombre_only
-             confidence = 0; // Confianza 0 para auto-match
-             nameMismatch = true; // Forzamos flag
-         }
-
-         // Validar Montos
          totalExpectedValue = matchedRecords.reduce((sum, r) => sum + r.valorEsperado, 0);
-         if (matchedRecords.length > 1 || bank.monto >= matchedRecords[0].valorEsperado * 1.8) {
-            isGroupPayment = true;
-            estimatedPeople = Math.max(matchedRecords.length, Math.round(bank.monto / PRICE_DISCOUNT));
-         }
+         if (matchedRecords.length > 1 || bank.monto >= matchedRecords[0].valorEsperado * 1.8) isGroupPayment = true;
 
          if (bank.monto < totalExpectedValue - 0.5) paymentStatus = 'underpaid';
          else if (bank.monto > totalExpectedValue + 5 && !isGroupPayment) paymentStatus = 'overpaid';
@@ -445,12 +419,12 @@ export default function App() {
 
       return {
         bank, records: matchedRecords, status, matchType, claimedBy: historical?.atleta,
-        nameMismatch, isFamily, isGroupPayment, paymentStatus, estimatedPeople, confidenceScore: confidence,
-        totalExpectedValue, isInvertedOrder: false, isStrongNameMatch: !nameMismatch
+        nameMismatch: false, isFamily: false, isGroupPayment, paymentStatus, estimatedPeople: 1, confidenceScore: 0,
+        totalExpectedValue, isInvertedOrder: false, isStrongNameMatch: false
       };
     });
 
-    setMatches(newMatches);
+    setMatches(newMatches as any);
     if (newMatches.length > 0) showStatus('success', `Procesadas ${newMatches.length} filas.`);
     else showStatus('error', 'Sin datos.');
   };
@@ -461,60 +435,37 @@ export default function App() {
     try {
       const { documento, monto } = match.bank;
       const docIdClean = cleanDocNumber(documento);
-      
       const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'verified_receipts', docIdClean);
       const docSnap = await getDoc(docRef);
       if (docSnap.exists() && !match.isGroupPayment) { showStatus('error', 'FRAUDE: Doc usado.'); setLoading(false); return; }
 
       for (const record of match.records) {
-          const tipoLabel = record.tipoComprobante === 'FISICO' ? '(PAPEL FÍSICO)' : '';
+          // Etiqueta especial para Airtable según el tipo de match
+          let label = 'MATCH';
+          if (match.status === 'ocr_triangulation') label = 'INTERBANCARIA (VALIDADO X FOTO)';
+          else if (match.matchType === 'documento') label = 'OCR DOC EXACTO';
+          
           await fetch(`https://api.airtable.com/v0/${config.baseId}/${encodeURIComponent(config.tableName)}/${record.id}`, {
             method: 'PATCH', headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fields: { 
-                'Etapa': 'Inscrito', 
-                'Numero Comprobante': documento, 
-                'Comentarios': `✅ VALIDADO [${new Date().toLocaleDateString()}] ${tipoLabel} - OCR MATCH: ${documento} | Banco: $${monto}` 
-            } })
+            body: JSON.stringify({ fields: { 'Etapa': 'Inscrito', 'Numero Comprobante': documento, 'Comentarios': `✅ VALIDADO [${new Date().toLocaleDateString()}] ${label} - Ref: ${documento} | $${monto}` } })
           });
       }
-
-      const atletasNames = match.records.map((r: any) => r.nombre).join(', ');
-      const firestoreId = match.records.length > 1 ? `${docIdClean}_GRUPO` : docIdClean;
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'verified_receipts', firestoreId), { 
-          atleta: atletasNames, fecha: new Date().toISOString(), monto, uid: user.uid, isGroup: true, groupSize: match.records.length, originalDoc: documento
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'verified_receipts', docIdClean), { 
+          atleta: match.records.map((r:any)=>r.nombre).join(', '), fecha: new Date().toISOString(), monto, uid: user.uid 
       });
-      
-      const verifiedIds = match.records.map((r: any) => r.id);
-      setMatches(prev => prev.map(m => {
-          const hasVerifiedRecord = m.records.some(r => verifiedIds.includes(r.id));
-          return hasVerifiedRecord ? { ...m, status: 'verified' as const } : m;
-      }));
+      setMatches(prev => prev.map(m => m.bank.documento === documento ? { ...m, status: 'verified' } : m));
       showStatus('success', `Validado: ${documento}`);
-    } catch (e) { console.error(e); showStatus('error', 'Error al guardar.'); } finally { setLoading(false); }
+    } catch (e) { showStatus('error', 'Error al guardar.'); } finally { setLoading(false); }
   };
 
-  // BOTON "VALIDAR TODO": AHORA ES SÚPER SEGURO
   const handleBulkConfirm = async () => {
-      // SOLO valida si status es 'found' (match de documento) Y no hay problemas de dinero
-      const perfectMatches = matches.filter(m => 
-          m.status === 'found' && 
-          m.matchType === 'documento' &&
-          m.paymentStatus !== 'underpaid'
-      );
-
-      if(perfectMatches.length === 0) return showStatus('error', 'No hay coincidencias 100% seguras.');
-      if(!confirm(`¿Procesar ${perfectMatches.length} pagos SEGUROS? (Los dudosos se ignorarán)`)) return;
-
+      const perfectMatches = matches.filter(m => m.status === 'found' && m.paymentStatus !== 'underpaid');
+      if(perfectMatches.length === 0) return showStatus('error', 'No hay coincidencias seguras.');
+      if(!confirm(`¿Procesar ${perfectMatches.length} pagos SEGUROS?`)) return;
       setLoading(true);
-      let processed = 0;
-      const CHUNK_SIZE = 3;
-      for (let i = 0; i < perfectMatches.length; i += CHUNK_SIZE) {
-          const chunk = perfectMatches.slice(i, i + CHUNK_SIZE);
-          await Promise.all(chunk.map(match => confirmInCRM(match)));
-          processed += chunk.length;
-      }
+      for (const match of perfectMatches) { await confirmInCRM(match); }
       setLoading(false);
-      showStatus('success', `Se validaron ${processed} pagos automáticamente.`);
+      showStatus('success', `Se validaron ${perfectMatches.length} pagos.`);
   };
 
   const openManualVerify = (record: Record) => {
@@ -527,7 +478,7 @@ export default function App() {
   const executeManualVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !db || activeVerifyRecords.length === 0) return;
-    const docIdOriginal = manualDocId.trim() || `MANUAL-${Date.now().toString().slice(-6)}`;
+    const docIdOriginal = manualDocId.trim() || `MANUAL-${Date.now()}`;
     const docIdClean = cleanDocNumber(docIdOriginal);
     const monto = parseFloat(manualAmount) || 0;
     setLoading(true);
@@ -535,30 +486,25 @@ export default function App() {
       for (const record of activeVerifyRecords) {
           await fetch(`https://api.airtable.com/v0/${config.baseId}/${encodeURIComponent(config.tableName)}/${record.id}`, {
             method: 'PATCH', headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fields: { 'Etapa': 'Inscrito', 'Numero Comprobante': docIdOriginal, 'Comentarios': `✅ VALIDADO MANUAL [${new Date().toLocaleDateString()}] - $${monto} - Ref: ${docIdOriginal}` } })
+            body: JSON.stringify({ fields: { 'Etapa': 'Inscrito', 'Numero Comprobante': docIdOriginal, 'Comentarios': `✅ MANUAL [${new Date().toLocaleDateString()}] - $${monto}` } })
           });
       }
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'verified_receipts', docIdClean), { 
-        atleta: activeVerifyRecords.map(r => r.nombre).join(', '), fecha: new Date().toISOString(), monto: monto, uid: user.uid, isGroup: false, manual: true
-      });
-      const verifiedIds = activeVerifyRecords.map(r => r.id);
-      setAirtableRecords(prev => prev.filter(r => !verifiedIds.includes(r.id)));
-      showStatus('success', 'Pago validado correctamente.');
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'verified_receipts', docIdClean), { atleta: activeVerifyRecords[0].nombre, fecha: new Date().toISOString(), monto, manual: true });
+      setAirtableRecords(prev => prev.filter(r => !activeVerifyRecords.includes(r)));
+      showStatus('success', 'Pago validado.');
       setVerifyModalOpen(false);
-      setActiveVerifyRecords([]);
-    } catch (e) { console.error(e); showStatus('error', 'Error al validar manual.'); } finally { setLoading(false); }
+    } catch (e) { showStatus('error', 'Error manual.'); } finally { setLoading(false); }
   };
 
   const filteredRecords = airtableRecords.filter(r => r.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || r.cedula.includes(searchTerm));
-
-  const perfectMatchesCount = matches.filter(m => 
-    m.status === 'found' && 
-    m.matchType === 'documento' &&
-    m.paymentStatus !== 'underpaid'
-  ).length;
+  const perfectMatchesCount = matches.filter(m => m.status === 'found' && m.paymentStatus !== 'underpaid').length;
 
   if (!isMounted) return null;
   if (isLocked) return <LockScreen pin={pinInput} setPin={setPinInput} error={pinError} unlock={handleUnlock} />;
+
+  // SEPARACIÓN DE LISTAS PARA UI
+  const regularMatches = matches.filter(m => m.status !== 'ocr_triangulation');
+  const ghostMatches = matches.filter(m => m.status === 'ocr_triangulation');
 
   return (
     <div className="fixed inset-0 z-[100] bg-zinc-950 text-zinc-200 flex flex-col font-sans overflow-hidden">
@@ -568,10 +514,7 @@ export default function App() {
       <div className="h-16 border-b border-zinc-800 bg-zinc-900/50 backdrop-blur-xl flex justify-between items-center px-6 shrink-0 z-20">
           <div className="flex items-center gap-3">
              <div className="bg-sky-500/10 p-2 rounded-lg border border-sky-500/20"><ShieldCheck size={20} className="text-sky-400"/></div>
-             <div>
-                <h1 className="text-sm font-black uppercase tracking-widest text-white leading-none">Búnker 10k</h1>
-                <span className="text-[10px] font-medium text-zinc-500 tracking-wider">SISTEMA ANTI-FRAUDE STRICT</span>
-             </div>
+             <div><h1 className="text-sm font-black uppercase tracking-widest text-white leading-none">Búnker 10k</h1><span className="text-[10px] font-medium text-zinc-500 tracking-wider">SISTEMA ANTI-FRAUDE STRICT</span></div>
           </div>
           <div className="flex gap-2">
              <HeaderBtn onClick={fetchAirtableRecords} icon={RefreshCw} label={loading ? "CARGANDO..." : "RECARGAR"} spin={loading} />
@@ -581,91 +524,63 @@ export default function App() {
       </div>
 
       <div className="flex-1 flex gap-0 h-full min-h-0 relative">
-        
-        {/* SIDEBAR OCR */}
         <div className="w-[320px] border-r border-zinc-800 flex flex-col bg-zinc-900/30 hidden lg:flex backdrop-blur-sm">
            <div className="p-3 border-b border-zinc-800 flex flex-col gap-3 bg-zinc-900/50">
-              <div className="flex justify-between items-center">
-                 <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2"><Users size={14}/> ATLETAS ({airtableRecords.length})</span>
-                 <button onClick={scanAll} disabled={isScanningAll || airtableRecords.length === 0} className="text-[10px] px-2 py-1.5 rounded bg-sky-600 hover:bg-sky-500 text-white shadow-lg shadow-sky-900/20 transition-all flex items-center gap-1 font-black tracking-wide border border-sky-500">{isScanningAll ? <Loader2 className="animate-spin" size={12}/> : <ZapFast size={12}/>} ESCANEAR TURBO</button>
-              </div>
-              
+              <div className="flex justify-between items-center"><span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2"><Users size={14}/> ATLETAS ({airtableRecords.length})</span><button onClick={scanAll} disabled={isScanningAll || airtableRecords.length === 0} className="text-[10px] px-2 py-1.5 rounded bg-sky-600 hover:bg-sky-500 text-white shadow-lg shadow-sky-900/20 transition-all flex items-center gap-1 font-black tracking-wide border border-sky-500">{isScanningAll ? <Loader2 className="animate-spin" size={12}/> : <ZapFast size={12}/>} ESCANEAR TURBO</button></div>
+              {/* BARRA DE PROGRESO */}
               {isScanningAll && (
-                  <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden relative">
+                  <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden relative mt-2">
                       <div className="h-full bg-emerald-500 transition-all duration-300" style={{ width: `${(scanProgress.current / scanProgress.total) * 100}%` }}></div>
                   </div>
               )}
-              {isScanningAll && <div className="text-[9px] text-right text-emerald-500 font-mono font-bold">{scanProgress.current} / {scanProgress.total}</div>}
-
-              <div className="relative group">
-                  <div className="absolute inset-y-0 left-2.5 flex items-center pointer-events-none text-zinc-500"><Search size={12}/></div>
-                  <input type="text" className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-zinc-300 focus:border-sky-500/50 focus:ring-1 focus:ring-sky-500/20 outline-none transition-all placeholder:text-zinc-600 font-medium" placeholder="Buscar por nombre o cédula..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/>
-                  {searchTerm && <button onClick={() => setSearchTerm("")} className="absolute inset-y-0 right-2 flex items-center text-zinc-500 hover:text-white"><XCircle size={12}/></button>}
-              </div>
+              {isScanningAll && <div className="text-[9px] text-right text-emerald-500 font-mono font-bold mt-1">{scanProgress.current} / {scanProgress.total}</div>}
+              
+              <div className="relative group mt-2"><div className="absolute inset-y-0 left-2.5 flex items-center pointer-events-none text-zinc-500"><Search size={12}/></div><input type="text" className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-zinc-300 focus:border-sky-500/50 focus:ring-1 focus:ring-sky-500/20 outline-none transition-all placeholder:text-zinc-600 font-medium" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/></div>
            </div>
-           
            <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2">
-              {filteredRecords.length === 0 && airtableRecords.length > 0 && <div className="text-center p-4 text-xs text-zinc-500 font-medium">No se encontraron atletas.</div>}
               {filteredRecords.map(r => (
                 <div key={r.id} className={`group p-2.5 rounded-lg border transition-all text-xs flex flex-col gap-1.5 relative overflow-hidden ${r.statusIA === 'listo' ? 'bg-sky-950/10 border-sky-500/30' : 'bg-zinc-900/40 border-zinc-800/60 hover:border-zinc-700'}`}>
                    {r.statusIA === 'listo' && <div className="absolute top-0 right-0 w-2 h-2 bg-sky-500 rounded-bl shadow-[0_0_10px_rgba(14,165,233,0.5)]"></div>}
                    <div className="flex justify-between items-start gap-2">
-                      <div className="flex-1 min-w-0">
-                        <span className="font-bold text-zinc-200 block text-[11px] mb-0.5 truncate uppercase" title={r.nombre}>{r.nombre}</span>
-                        <span className="text-[10px] text-zinc-500 font-mono flex items-center gap-1"><Hash size={10}/> {r.cedula}</span>
-                      </div>
+                      <div className="flex-1 min-w-0"><span className="font-bold text-zinc-200 block text-[11px] mb-0.5 truncate uppercase" title={r.nombre}>{r.nombre}</span><span className="text-[10px] text-zinc-500 font-mono flex items-center gap-1"><Hash size={10}/> {r.cedula}</span></div>
                       <div className="flex items-center gap-1">
-                          {r.fotoUrl && <button onClick={() => setSelectedImage(r.fotoUrl)} className="w-7 h-7 flex items-center justify-center rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white border border-zinc-700" title="Ver comprobante original"><ImageIcon size={12}/></button>}
-                          <button onClick={() => scanReceiptIA(r)} disabled={scanningId === r.id} className="w-7 h-7 flex items-center justify-center rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-sky-400 border border-zinc-700" title="Re-escanear">{scanningId === r.id ? <Loader2 size={12} className="animate-spin"/> : <Scan size={12}/>}</button>
-                          <button onClick={() => openManualVerify(r)} className="w-7 h-7 flex items-center justify-center rounded bg-zinc-800 hover:bg-emerald-600 text-zinc-400 hover:text-white transition-colors border border-transparent hover:border-emerald-500/50" title="Validación Manual"><Check size={12}/></button>
+                          {r.fotoUrl && <button onClick={() => setSelectedImage(r.fotoUrl)} className="w-7 h-7 flex items-center justify-center rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white border border-zinc-700"><ImageIcon size={12}/></button>}
+                          <button onClick={() => scanReceiptIA(r)} disabled={scanningId === r.id} className="w-7 h-7 flex items-center justify-center rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-sky-400 border border-zinc-700">{scanningId === r.id ? <Loader2 size={12} className="animate-spin"/> : <Scan size={12}/>}</button>
+                          <button onClick={() => openManualVerify(r)} className="w-7 h-7 flex items-center justify-center rounded bg-zinc-800 hover:bg-emerald-600 text-zinc-400 hover:text-white border border-transparent hover:border-emerald-500/50"><Check size={12}/></button>
                       </div>
                    </div>
-                   {r.docExtraido && (
-                       <div className="mt-1 pt-1.5 border-t border-zinc-800/50 flex flex-col gap-0.5">
-                          <div className="flex justify-between items-center">
-                              <span className="text-[9px] text-zinc-500 uppercase font-bold tracking-wider">DOC DETECTADO</span>
-                              <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950/30 px-1.5 rounded">{r.docExtraido}</span>
-                          </div>
-                          {r.tipoComprobante === 'FISICO' && <span className="text-[8px] text-amber-500 font-bold bg-amber-950/20 px-1 rounded w-fit mt-0.5">COMPROBANTE FÍSICO</span>}
-                       </div>
-                   )}
+                   {r.docExtraido && <div className="mt-1 pt-1.5 border-t border-zinc-800/50 flex flex-col gap-0.5"><div className="flex justify-between items-center"><span className="text-[9px] text-zinc-500 uppercase font-bold tracking-wider">DOC DETECTADO</span><span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950/30 px-1.5 rounded">{r.docExtraido}</span></div></div>}
                 </div>
               ))}
            </div>
         </div>
 
-        {/* WORKSPACE */}
         <div className="flex-1 flex flex-col bg-zinc-950 relative">
            <div className="p-4 border-b border-zinc-800 bg-zinc-900/20 flex gap-4 h-24 items-center shrink-0 z-10">
               <div className="flex-1 h-full relative group">
                   <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-zinc-600"><FileText size={16}/></div>
-                  <textarea className="w-full h-full bg-zinc-950 border border-zinc-800 rounded-xl pl-10 pr-10 p-3 text-xs font-mono text-zinc-300 resize-none focus:border-sky-500/50 focus:ring-1 focus:ring-sky-900/50 outline-none leading-tight transition-all shadow-inner" placeholder="Pega aquí el reporte del banco..." value={bankData} onChange={(e) => setBankData(e.target.value)}/>
+                  <textarea className="w-full h-full bg-zinc-950 border border-zinc-800 rounded-xl pl-10 pr-10 p-3 text-xs font-mono text-zinc-300 resize-none focus:border-sky-500/50 focus:ring-1 focus:ring-sky-500/20 outline-none leading-tight transition-all shadow-inner" placeholder="Pega aquí el reporte del banco..." value={bankData} onChange={(e) => setBankData(e.target.value)}/>
                   {bankData && <button onClick={() => setBankData("")} className="absolute top-3 right-3 text-zinc-600 hover:text-white bg-zinc-900 hover:bg-rose-500/20 rounded p-1 transition-all"><Eraser size={14}/></button>}
               </div>
               <div className="flex flex-col gap-2 h-full justify-center">
-                  <button ref={runBtnRef} onClick={processMatches} className="flex-1 px-8 bg-gradient-to-br from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-black text-xs rounded-lg uppercase tracking-wider flex flex-col justify-center items-center gap-1 shadow-xl shadow-indigo-900/20 active:scale-95 transition-all border border-sky-500/20" title="Ctrl + Enter"><ArrowRight size={18}/> <span className="text-[10px] opacity-80">EJECUTAR</span></button>
-                  {perfectMatchesCount > 0 && (
-                      <button ref={bulkBtnRef} onClick={handleBulkConfirm} className="flex-1 px-4 bg-emerald-600/10 hover:bg-emerald-600/20 border border-emerald-500/30 text-emerald-400 hover:text-emerald-300 font-bold text-[10px] rounded-lg uppercase tracking-wide flex items-center justify-center gap-2 transition-all" title="Ctrl + Shift + Enter">
-                          <CheckCheck size={14}/> VALIDAR {perfectMatchesCount} PERFECTOS
-                      </button>
-                  )}
+                  <button ref={runBtnRef} onClick={processMatches} className="flex-1 px-8 bg-gradient-to-br from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-black text-xs rounded-lg uppercase tracking-wider flex flex-col justify-center items-center gap-1 shadow-xl shadow-indigo-900/20 active:scale-95 transition-all border border-sky-500/20"><ArrowRight size={18}/> <span className="text-[10px] opacity-80">EJECUTAR</span></button>
+                  {perfectMatchesCount > 0 && <button ref={bulkBtnRef} onClick={handleBulkConfirm} className="flex-1 px-4 bg-emerald-600/10 hover:bg-emerald-600/20 border border-emerald-500/30 text-emerald-400 hover:text-emerald-300 font-bold text-[10px] rounded-lg uppercase tracking-wide flex items-center justify-center gap-2 transition-all"><CheckCheck size={14}/> VALIDAR {perfectMatchesCount} PERFECTOS</button>}
               </div>
            </div>
 
-           {/* RESULTS */}
            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3 bg-zinc-950">
               {matches.length === 0 && <div className="h-full flex flex-col items-center justify-center text-zinc-800 gap-4"><LayoutDashboard size={64} strokeWidth={0.5} className="opacity-20"/><span className="text-xs font-bold uppercase tracking-widest opacity-40">Esperando datos para procesar...</span></div>}
-              {matches.map((m, i) => (
+              
+              {/* LISTA NORMAL DE MATCHES */}
+              {regularMatches.map((m, i) => (
                 <div key={i} className={`flex items-stretch rounded-xl border transition-all text-sm h-auto min-h-[5rem] shadow-lg relative overflow-hidden group 
                     ${m.status === 'verified' ? 'bg-zinc-900/30 border-emerald-900/30 opacity-60' 
                     : m.status === 'fraud' ? 'bg-rose-950/10 border-rose-900/40' 
-                    : m.status === 'doc_mismatch' ? 'bg-orange-950/10 border-orange-900/40'
                     : 'bg-zinc-900/80 border-zinc-800 hover:border-zinc-700'}`}>
                   
                   <div className={`w-1.5 shrink-0 
                       ${m.status === 'verified' ? 'bg-emerald-500' 
                       : m.status === 'fraud' ? 'bg-rose-500' 
-                      : m.status === 'doc_mismatch' ? 'bg-orange-500'
                       : m.isGroupPayment ? 'bg-violet-500' 
                       : m.paymentStatus === 'underpaid' ? 'bg-amber-500' 
                       : m.status === 'found' ? 'bg-sky-500' 
@@ -678,14 +593,6 @@ export default function App() {
                      </div>
                      <span className="font-mono text-white font-bold tracking-tight text-sm mb-1">{m.bank.documento}</span>
                      <span className="text-[10px] text-zinc-400 truncate font-medium flex items-center gap-1" title={m.bank.depositor}>{m.bank.esInterbancaria && <Landmark size={12} className="text-amber-500"/>}{m.bank.depositor}</span>
-                     
-                     {/* WARNING SPECIFIC FOR DOC MISMATCH */}
-                     {m.status === 'doc_mismatch' && (
-                        <div className="mt-2 p-2 bg-orange-900/20 border border-orange-500/30 rounded text-[9px] text-orange-400 font-bold leading-tight flex items-center gap-2">
-                            <FileX size={12} className="shrink-0"/>
-                            <span>DOC NO COINCIDE CON OCR</span>
-                        </div>
-                     )}
                   </div>
                   <div className="flex-1 p-4 flex flex-col justify-center relative">
                      {m.records.length > 0 ? (
@@ -729,15 +636,68 @@ export default function App() {
                         <div className="flex flex-col items-center text-emerald-500 gap-1"><CheckCircle2 size={24}/><span className="text-[9px] font-bold">LISTO</span></div>
                      ) : m.records.length > 0 ? (
                         <button onClick={() => confirmInCRM(m)} className={`w-full h-full rounded-lg text-[10px] font-black uppercase transition-all flex flex-col items-center justify-center leading-tight gap-1 shadow-lg active:scale-95 group-hover:scale-105 
-                            ${m.matchType !== 'documento' || m.paymentStatus === 'underpaid' 
-                                ? 'bg-zinc-800 text-zinc-400 hover:bg-amber-600 hover:text-white border border-zinc-700' // Botón gris/ámbar si hay dudas
-                                : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/20'}`}>
-                           <Check size={20} strokeWidth={3}/><span>{m.matchType !== 'documento' || m.paymentStatus === 'underpaid' ? 'MANUAL' : 'OK'}</span>
+                            ${m.paymentStatus === 'underpaid' ? 'bg-amber-600 hover:bg-amber-500' : 'bg-emerald-600 hover:bg-emerald-500'} text-white shadow-emerald-900/20`}>
+                           <Check size={20} strokeWidth={3}/><span>{m.paymentStatus === 'underpaid' ? 'MANUAL' : 'OK'}</span>
                         </button>
                      ) : <div className="text-[9px] font-bold text-zinc-600 text-center flex flex-col items-center gap-1 opacity-50"><XCircle size={14}/> <span>MANUAL</span></div>}
                   </div>
                 </div>
               ))}
+
+              {/* SECCIÓN ESPECIAL: INTERBANCARIAS FANTASMA (OCR TRIANGULATION) */}
+              {ghostMatches.length > 0 && (
+                  <div className="mt-8 mb-4 border-t-2 border-violet-500/30 pt-6 pb-2 relative">
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-zinc-950 px-6 text-violet-400 font-black text-xs uppercase tracking-widest flex items-center gap-2 border border-violet-500/30 rounded-full py-1.5 shadow-[0_0_20px_rgba(139,92,246,0.3)]">
+                          <ScanEye size={16}/> POSIBLES INTERBANCARIAS DETECTADAS (OCR)
+                      </div>
+                      
+                      {ghostMatches.map((m, i) => (
+                        <div key={`ghost-${i}`} className="flex items-stretch rounded-xl border border-violet-500/30 bg-violet-950/5 mb-3 transition-all text-sm h-auto min-h-[5rem] shadow-lg relative overflow-hidden group hover:border-violet-500/60">
+                            <div className="w-1.5 shrink-0 bg-violet-500 animate-pulse"></div>
+                            
+                            {/* BANCO */}
+                            <div className="w-[240px] p-4 border-r border-violet-500/20 flex flex-col justify-center shrink-0">
+                                <div className="flex justify-between items-baseline mb-2">
+                                    <span className="text-[9px] font-black text-violet-400 uppercase tracking-wider">BANCO (INTERB)</span>
+                                    <span className="font-mono font-bold text-sm text-white">${m.bank.monto.toFixed(2)}</span>
+                                </div>
+                                <span className="font-mono text-zinc-500 font-bold tracking-tight text-xs mb-1 line-through opacity-50">{m.bank.documento}</span>
+                                <span className="text-[10px] text-zinc-400 truncate font-medium flex items-center gap-1"><Landmark size={12} className="text-violet-500"/> Sin Nombre Válido</span>
+                            </div>
+
+                            {/* FOTO MATCH */}
+                            <div className="flex-1 p-4 flex flex-col justify-center relative">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <span className="text-[9px] bg-violet-500 text-white px-2 py-0.5 rounded font-bold uppercase tracking-wider shadow-lg shadow-violet-500/20 flex items-center gap-1"><BrainCircuit size={10}/> COINCIDENCIA POR FOTO</span>
+                                </div>
+                                {m.records.map((r, idx) => (
+                                    <div key={idx} className="bg-zinc-950/60 p-2.5 rounded-lg border border-violet-500/30 flex justify-between items-center group-hover:bg-zinc-950/80 transition-colors">
+                                        <div>
+                                            <span className="block text-[11px] font-bold text-white uppercase mb-0.5">{r.nombre}</span>
+                                            <span className="text-[9px] text-zinc-400 font-mono flex items-center gap-2">
+                                                <span>OCR Nombre: <span className="text-violet-300">{r.nombreExtraido}</span></span>
+                                                <span>OCR Monto: <span className="text-violet-300">${r.montoExtraido}</span></span>
+                                            </span>
+                                        </div>
+                                        {r.fotoUrl && <button onClick={() => setSelectedImage(r.fotoUrl)} className="text-[9px] bg-zinc-800 px-3 py-1.5 rounded text-violet-300 hover:text-white border border-transparent hover:border-violet-500/50 flex items-center gap-1 uppercase font-bold tracking-wider transition-all"><Eye size={12}/> VER FOTO</button>}
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* ACCION */}
+                            <div className="w-24 p-2 flex items-center justify-center bg-violet-950/10 border-l border-violet-500/20">
+                                {m.status === 'verified' ? (
+                                    <div className="flex flex-col items-center gap-1 text-emerald-500"><CheckCircle2 size={24}/><span className="text-[9px] font-bold">LISTO</span></div>
+                                ) : (
+                                    <button onClick={() => confirmInCRM(m)} className="w-full h-full rounded-lg text-[10px] font-black uppercase transition-all flex flex-col items-center justify-center leading-tight gap-1 shadow-lg active:scale-95 bg-violet-600 hover:bg-violet-500 text-white shadow-violet-900/30">
+                                        <GripHorizontal size={20}/><span>CONFIRMAR</span>
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                      ))}
+                  </div>
+              )}
            </div>
         </div>
 
