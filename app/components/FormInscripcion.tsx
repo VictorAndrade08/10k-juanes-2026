@@ -662,12 +662,12 @@ export default function InscripcionPage() {
                   
                   <div className="space-y-6 text-lg md:text-xl">
                     <div className="flex justify-between items-center">
-                        <span className="text-gray-500">Cuenta Ahorros:</span>
+                        <span className="text-gray-500">Cuenta Corriente:</span>
                         <span className="font-mono text-white bg-white/5 px-3 py-1 rounded border border-white/10">2100057760</span>
                     </div>
                     <div className="flex justify-between items-center">
                         <span className="text-gray-500">Tipo:</span>
-                        <span className="text-right text-white font-medium">Ahorros</span>
+                        <span className="text-right text-white font-medium">Corriente</span>
                     </div>
                     <div className="flex justify-between items-start">
                       <span className="text-gray-500">Titular:</span>
