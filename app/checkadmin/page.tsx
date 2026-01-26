@@ -10,8 +10,11 @@ import {
   Scan, FileText, Loader2, Eye, Settings2, AlertTriangle, Lock, History, ShieldAlert,
   Fingerprint, Zap, Info, CreditCard, Share2, XCircle, AlertOctagon, Hash, Calendar,
   Maximize2, Database, Image as ImageIcon, User, Wallet, FileWarning, Unlock, LogOut,
-  Users, Accessibility, LayoutDashboard, ChevronRight, Check, Landmark, Tag, CheckCircle, File, ThumbsUp, Eraser,
-  Users2, Contact, BadgeAlert, ArrowLeftRight, FileSearch, CheckCheck, Play, Zap as ZapFast, FileX, Scale, HelpCircle, EyeOff, BrainCircuit, GripHorizontal, ScanEye, Layers, Ghost, ListFilter
+  Users, Accessibility, LayoutDashboard, ChevronRight, Check, Landmark, Tag, CheckCircle, 
+  File as FileIcon, // Importación corregida para evitar conflictos
+  ThumbsUp, Eraser, Users2, Contact, BadgeAlert, ArrowLeftRight, FileSearch, CheckCheck, Play, 
+  Zap as ZapFast, FileX, Scale, HelpCircle, EyeOff, BrainCircuit, GripHorizontal, ScanEye, 
+  Layers, Ghost, ListFilter, ExternalLink 
 } from 'lucide-react';
 
 // --- CONFIGURACIÓN FIREBASE ---
@@ -95,7 +98,13 @@ interface MatchResult {
   isStrongNameMatch: boolean;
 }
 
-// --- NORMALIZACIÓN ---
+// --- NORMALIZACIÓN Y UTILIDADES ---
+
+const isFilePdf = (url: string | null) => {
+    if (!url) return false;
+    return url.toLowerCase().includes('.pdf') || url.toLowerCase().includes('format=pdf');
+};
+
 const cleanDocNumber = (doc: string | number | null) => {
     if (!doc) return "";
     return String(doc).replace(/\D/g, '').replace(/^0+/, '');
@@ -124,7 +133,7 @@ export default function App() {
   const [isMounted, setIsMounted] = useState(false);
   const [user, setUser] = useState<FirebaseUser | null>(null);
   
-  // PESTAÑAS: 'standard' (Match directo) | 'ghost' (Triangulación OCR Interbancaria)
+  // PESTAÑAS: 'standard' (Match directo + OCR) | 'ghost' (Solo montos dudosos)
   const [activeTab, setActiveTab] = useState<'standard' | 'ghost'>('standard');
 
   const [config, setConfig] = useState({
@@ -170,9 +179,7 @@ export default function App() {
   useEffect(() => {
     if (!auth) return;
     const initAuth = async () => {
-      try {
-        await signInAnonymously(auth);
-      } catch (err) { console.error("Auth Error:", err); }
+      try { await signInAnonymously(auth); } catch (err) { console.error("Auth Error:", err); }
     };
     initAuth();
     const unsubscribe = onAuthStateChanged(auth, setUser);
@@ -191,31 +198,22 @@ export default function App() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            runBtnRef.current?.click();
-        }
-        if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'Enter') {
-            e.preventDefault();
-            bulkBtnRef.current?.click();
-        }
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); runBtnRef.current?.click(); }
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'Enter') { e.preventDefault(); bulkBtnRef.current?.click(); }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const handleUnlock = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (pinInput === ACCESS_PIN) { setIsLocked(false); setPinError(false); } 
-    else { setPinError(true); setPinInput(""); setTimeout(() => setPinError(false), 2000); }
-  };
+  const handleUnlock = (e: React.FormEvent) => { e.preventDefault(); if (pinInput === ACCESS_PIN) { setIsLocked(false); setPinError(false); } else { setPinError(true); setPinInput(""); setTimeout(() => setPinError(false), 2000); } };
   const handleLock = () => { setIsLocked(true); setPinInput(""); };
   const showStatus = (type: 'success' | 'error', message: string) => { setStatus({ type, message }); setTimeout(() => setStatus({ type: '', message: '' }), 4000); };
   const saveConfig = (e: React.FormEvent) => { e.preventDefault(); localStorage.setItem(AIRTABLE_CONFIG_KEY, JSON.stringify(config)); setIsConfigOpen(false); showStatus('success', 'Configuración guardada.'); };
   
   const urlToBase64 = async (url: string) => {
     try {
-      const response = await fetch(url, { mode: 'cors' }).catch(() => null);
+      if (isFilePdf(url)) return null;
+      const response = await fetch(url, { mode: 'cors', referrerPolicy: 'no-referrer' }).catch(() => null);
       if (!response || !response.ok) return null;
       const blob = await response.blob();
       return new Promise<{ data: string; mimeType: string } | null>((resolve) => {
@@ -237,13 +235,9 @@ export default function App() {
       do {
          const offsetParam: string = offset ? `&offset=${offset}` : '';
          const url = `https://api.airtable.com/v0/${config.baseId}/${encodeURIComponent(config.tableName)}?filterByFormula=${encodeURIComponent(`{Etapa}='${config.filterStage}'`)}${offsetParam}`;
-         
          const response = await fetch(url, { headers: { Authorization: `Bearer ${config.apiKey}` } });
          const data = await response.json();
-         
-         if (data.records) {
-             allRecords = [...allRecords, ...data.records];
-         }
+         if (data.records) allRecords = [...allRecords, ...data.records];
          offset = data.offset;
       } while (offset);
 
@@ -258,24 +252,17 @@ export default function App() {
           esTerceraEdad: (r.fields['edad'] || 0) >= 65,
           valorEsperado: (r.fields['Discapacidad'] === true || (r.fields['edad'] || 0) >= 65) ? PRICE_DISCOUNT : PRICE_FULL,
           fotoUrl: r.fields['Comprobante']?.[0]?.url || null,
-          docExtraido: null, 
-          montoExtraido: null,
-          nombreExtraido: null, 
-          tipoComprobante: null,
-          statusIA: 'pendiente'
+          docExtraido: null, montoExtraido: null, nombreExtraido: null, tipoComprobante: null, statusIA: 'pendiente'
         })));
         showStatus('success', `${allRecords.length} atletas cargados.`);
       }
-    } catch (e) { 
-        console.error(e);
-        showStatus('error', 'Error conectando con Airtable.'); 
-    } finally { 
-        setLoading(false); 
-    }
+    } catch (e) { showStatus('error', 'Error conectando con Airtable.'); } finally { setLoading(false); }
   };
 
   const scanReceiptIA = async (record: Record) => {
     if (!record.fotoUrl) return;
+    if (isFilePdf(record.fotoUrl)) { showStatus('error', 'PDF detectado: Revisión manual requerida.'); return; }
+
     const apiKeyToUse = GEMINI_KEY || config.apiKey;
     if (!apiKeyToUse || (apiKeyToUse.startsWith('pat') && !GEMINI_KEY)) return; 
 
@@ -300,16 +287,13 @@ export default function App() {
       const json = JSON.parse(text || "{}");
       
       const docId = json.documento ? String(json.documento).replace(/\D/g, '') : null;
-      // PARSEAR MONTO CORRECTAMENTE
       const montoClean = parseMontoIA(json.monto);
       
       setAirtableRecords(prev => prev.map(r => r.id === record.id ? { 
           ...r, 
-          docExtraido: docId, 
-          montoExtraido: montoClean, 
+          docExtraido: docId, montoExtraido: montoClean, 
           nombreExtraido: json.nombre ? String(json.nombre).toUpperCase() : null, 
-          tipoComprobante: json.tipo || 'DIGITAL', 
-          statusIA: docId ? 'listo' : 'error' 
+          tipoComprobante: json.tipo || 'DIGITAL', statusIA: docId ? 'listo' : 'error' 
       } : r));
     } catch (e) { 
         setAirtableRecords(prev => prev.map(r => r.id === record.id ? { ...r, statusIA: 'error' } : r)); 
@@ -318,7 +302,7 @@ export default function App() {
 
   const scanAll = async () => {
     setIsScanningAll(true);
-    const pendings = airtableRecords.filter(r => r.fotoUrl && r.statusIA === 'pendiente');
+    const pendings = airtableRecords.filter(r => r.fotoUrl && r.statusIA === 'pendiente' && !isFilePdf(r.fotoUrl));
     setScanProgress({ current: 0, total: pendings.length });
     const BATCH_SIZE = 5; 
     
@@ -328,77 +312,37 @@ export default function App() {
         setScanProgress(prev => ({ ...prev, current: Math.min(prev.current + batch.length, prev.total) }));
     }
     
-    setIsScanningAll(false); 
-    setScanProgress({ current: 0, total: 0 });
+    setIsScanningAll(false); setScanProgress({ current: 0, total: 0 });
     showStatus('success', 'Escaneo Turbo completado.');
   };
 
   const processMatches = () => {
     if (!bankData.trim()) return showStatus('error', 'Faltan datos del banco.');
 
-    // --- PARSER DE BANCO MEJORADO PARA EL FORMATO ESPECIFICO ---
-    // El reporte del usuario tiene: AG. NORTE ... CODIGO ... DESCRIPCION CON SALTOS ... C ... MONTO ... SALDO ... FECHA
-    // Usamos una regex que trague los saltos de línea en la descripción.
-    
-    // 1. Normalizar saltos de línea para que sea un solo string largo si es necesario, o procesar bloques.
-    // Estrategia: Buscar el patrón "AG." y capturar hasta la "C" y el monto.
-    
     const regex = /(AG\.|OFICINA)[\s\S]+?(\d{6,})\s+([\s\S]+?)\s+C\s+(\d{1,5}[.,]\d{2})/g;
-    
     let match;
     const bankEntries = [];
-    
-    // Normalizamos el texto de entrada para facilitar el regex
-    // Eliminamos multiples espacios pero mantenemos la estructura general
     const rawData = bankData; 
 
     while ((match = regex.exec(rawData)) !== null) {
-      const docNum = match[2]; // El numero de documento
-      
-      // Limpieza de la descripcion (quitar saltos de linea)
+      const docNum = match[2];
       const rawDesc = match[3].replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
       const depositor = rawDesc.replace(/TRANSFERENC.*?DE\s+|DEP\s+CNB\s+|CONST\.\s+RECAUDACION\s+/i, '').trim();
-      
-      const montoStr = match[4].replace(',', '.');
-      const monto = parseFloat(montoStr);
-      
-      // Detección de interbancaria
+      const monto = parseFloat(match[4].replace(',', '.'));
       const esInterbancaria = /INTERB|SPI|OTROS BANCOS|TRANSF\.|BCE|EN LINEA|ONLINE|TRANSFERENCIA/i.test(rawDesc);
-
-      if (monto > 0) {
-          bankEntries.push({ 
-              documento: docNum, 
-              monto, 
-              depositor, 
-              esInterbancaria, 
-              esDuplicadoBanco: false 
-          });
-      }
+      if (monto > 0) bankEntries.push({ documento: docNum, monto, depositor, esInterbancaria, esDuplicadoBanco: false });
     }
 
-    // --- FALLBACK SI EL REGEX NO CAPTURA (Por si el formato varia ligeramente) ---
     if (bankEntries.length === 0) {
-        // Intento linea por linea simplificado
         const lines = bankData.split('\n');
         lines.forEach(l => {
-            // Busca Documento (6+ digitos) ... C ... Monto
             const m = l.match(/(\d{6,}).*?C\s+(\d+[.,]\d{2})/);
-            if(m) {
-                bankEntries.push({
-                    documento: m[1],
-                    monto: parseFloat(m[2].replace(',', '.')),
-                    depositor: l.substring(0, 50), // Fallback nombre
-                    esInterbancaria: true,
-                    esDuplicadoBanco: false
-                });
-            }
+            if(m) bankEntries.push({ documento: m[1], monto: parseFloat(m[2].replace(',', '.')), depositor: l.substring(0, 50), esInterbancaria: true, esDuplicadoBanco: false });
         });
     }
 
     const assignedIds = new Set();
-    
     const newMatches = bankEntries.map(bank => {
-      // 1. MATCH DOCUMENTO (Prioridad Máxima - Tab Directo)
       let matchedRecords = airtableRecords.filter(r => {
           if(!r.docExtraido) return false;
           return areDocsStrictlyEqual(r.docExtraido, bank.documento);
@@ -407,44 +351,29 @@ export default function App() {
       let matchType: MatchResult['matchType'] = 'none';
       let status: MatchResult['status'] = 'missing';
 
+      // 1. MATCH PERFECTO
       if (matchedRecords.length > 0) {
-          matchType = 'documento';
-          status = 'found';
+          matchType = 'documento'; 
+          status = 'found'; 
           matchedRecords.forEach(r => assignedIds.add(r.id));
-      } 
-      else {
-          // --- LOGICA DE TRIANGULACIÓN (INTERBANCARIA FANTASMA) ---
-          // Esta lógica se activa SIEMPRE si falla el documento.
-          // Busca coincidencia entre:
-          // 1. Monto del Banco == Monto leído en la FOTO (OCR)
-          // 2. Nombre en la FOTO == Nombre del Atleta en Airtable
-          
+      } else {
+          // 2. OCR TRIANGULACIÓN (INTELIGENTE)
           const foundByOCR = airtableRecords.find(r => {
               if (assignedIds.has(r.id)) return false;
-              // Requisito: El OCR debe haber leído algo de la foto
               if (r.statusIA !== 'listo' || !r.montoExtraido || !r.nombreExtraido) return false;
-
-              // A. Link Banco <-> Foto (Por Monto - Tolerancia 0.10c)
               const amountMatch = Math.abs(r.montoExtraido - bank.monto) < 0.1;
-              
-              // B. Link Foto <-> Atleta (Por Nombre)
               const ocrName = normalizeText(r.nombreExtraido);
               const crmName = normalizeText(r.nombre);
               const crmParts = crmName.split(/\s+/).filter(p => p.length > 2);
-              
-              // Al menos una parte del nombre debe coincidir entre la foto y el registro
-              const identityVerified = crmParts.some(part => ocrName.includes(part));
-
-              return amountMatch && identityVerified;
+              return amountMatch && crmParts.some(part => ocrName.includes(part));
           });
 
           if (foundByOCR) {
-              matchedRecords = [foundByOCR];
+              matchedRecords = [foundByOCR]; 
               matchType = 'ocr_ghost'; 
-              status = 'ocr_triangulation'; // Irá a la pestaña de "Interbancarias Fantasma"
+              status = 'ocr_triangulation'; // ESTO HACE QUE SE VAYA AL MAIN
               assignedIds.add(foundByOCR.id);
           } else {
-             // Si falla OCR, intentamos por nombre del banco (si existe)
              const foundByName = airtableRecords.find(r => {
                  if (assignedIds.has(r.id)) return false;
                  const bankParts = normalizeText(bank.depositor).split(/\s+/).filter(p => p.length > 3);
@@ -454,16 +383,10 @@ export default function App() {
                  bankParts.forEach(p => { if(crmName.includes(p)) hits++; });
                  return hits >= 1;
              });
-             
-             if(foundByName) {
-                 matchedRecords = [foundByName];
-                 matchType = 'nombre_only';
-                 status = 'manual_review';
-             }
+             if(foundByName) { matchedRecords = [foundByName]; matchType = 'nombre_only'; status = 'manual_review'; }
           }
       }
 
-      // 3. CHECK FRAUDE
       const cleanBankDoc = cleanDocNumber(bank.documento);
       const historical = historicalDocs[cleanBankDoc];
       if (historical) {
@@ -474,7 +397,6 @@ export default function App() {
           }
       }
 
-      let nameMismatch = false;
       let paymentStatus: 'correct' | 'underpaid' | 'overpaid' = 'correct';
       let isGroupPayment = false;
       let totalExpectedValue = 0;
@@ -482,7 +404,6 @@ export default function App() {
       if (matchedRecords.length > 0) {
          totalExpectedValue = matchedRecords.reduce((sum, r) => sum + r.valorEsperado, 0);
          if (matchedRecords.length > 1 || bank.monto >= matchedRecords[0].valorEsperado * 1.8) isGroupPayment = true;
-
          if (bank.monto < totalExpectedValue - 0.5) paymentStatus = 'underpaid';
          else if (bank.monto > totalExpectedValue + 5 && !isGroupPayment) paymentStatus = 'overpaid';
       }
@@ -519,9 +440,7 @@ export default function App() {
             body: JSON.stringify({ fields: { 'Etapa': 'Inscrito', 'Numero Comprobante': documento, 'Comentarios': `✅ VALIDADO [${new Date().toLocaleDateString()}] ${label} - Ref: ${documento} | $${monto}` } })
           });
       }
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'verified_receipts', docIdClean), { 
-          atleta: match.records.map((r:any)=>r.nombre).join(', '), fecha: new Date().toISOString(), monto, uid: user.uid 
-      });
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'verified_receipts', docIdClean), { atleta: match.records.map((r:any)=>r.nombre).join(', '), fecha: new Date().toISOString(), monto, uid: user.uid });
       setMatches(prev => prev.map(m => m.bank.documento === documento ? { ...m, status: 'verified' } : m));
       showStatus('success', `Validado: ${documento}`);
     } catch (e) { showStatus('error', 'Error al guardar.'); } finally { setLoading(false); }
@@ -560,8 +479,7 @@ export default function App() {
       }
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'verified_receipts', docIdClean), { atleta: activeVerifyRecords[0].nombre, fecha: new Date().toISOString(), monto, manual: true });
       setAirtableRecords(prev => prev.filter(r => !activeVerifyRecords.includes(r)));
-      showStatus('success', 'Pago validado.');
-      setVerifyModalOpen(false);
+      showStatus('success', 'Pago validado.'); setVerifyModalOpen(false);
     } catch (e) { showStatus('error', 'Error manual.'); } finally { setLoading(false); }
   };
 
@@ -571,12 +489,24 @@ export default function App() {
   if (!isMounted) return null;
   if (isLocked) return <LockScreen pin={pinInput} setPin={setPinInput} error={pinError} unlock={handleUnlock} />;
 
-  // SEPARACIÓN DE LISTAS PARA PESTAÑAS
-  const regularMatches = matches.filter(m => m.status !== 'ocr_triangulation' && m.status !== 'amount_match');
-  const ghostMatches = matches.filter(m => m.status === 'ocr_triangulation' || m.status === 'amount_match');
+  // --- LOGICA DE TABS CORREGIDA ---
+  // AHORA: regularMatches incluye 'ocr_triangulation' para que aparezcan en la principal.
+  const regularMatches = matches.filter(m => m.status !== 'amount_match');
+  const ghostMatches = matches.filter(m => m.status === 'amount_match');
+  
+  let displayedMatches = activeTab === 'standard' ? regularMatches : ghostMatches;
 
-  // MATCHES A MOSTRAR SEGÚN PESTAÑA ACTIVA
-  const displayedMatches = activeTab === 'standard' ? regularMatches : ghostMatches;
+  // --- SORTING FINAL: PERFECTOS -> OCR -> FRAUDE -> RESTO ---
+  displayedMatches.sort((a, b) => {
+      const getPriority = (status: string) => {
+          if (status === 'found') return -2; // 1ro: PERFECTOS
+          if (status === 'ocr_triangulation') return -1; // 2do: OCR INTELIGENTE
+          if (status === 'fraud' || status === 'reused') return 0; // 3ro: FRAUDE
+          if (status === 'verified') return 9; // ULTIMO: Verificados
+          return 1; // 4to: Resto
+      };
+      return getPriority(a.status) - getPriority(b.status);
+  });
 
   return (
     <div className="fixed inset-0 z-[100] bg-zinc-950 text-zinc-200 flex flex-col font-sans overflow-hidden">
@@ -616,7 +546,7 @@ export default function App() {
                    <div className="flex justify-between items-start gap-2">
                       <div className="flex-1 min-w-0"><span className="font-bold text-zinc-200 block text-[11px] mb-0.5 truncate uppercase" title={r.nombre}>{r.nombre}</span><span className="text-[10px] text-zinc-500 font-mono flex items-center gap-1"><Hash size={10}/> {r.cedula}</span></div>
                       <div className="flex items-center gap-1">
-                          {r.fotoUrl && <button onClick={() => setSelectedImage(r.fotoUrl)} className="w-7 h-7 flex items-center justify-center rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white border border-zinc-700"><ImageIcon size={12}/></button>}
+                          {r.fotoUrl && <button onClick={() => setSelectedImage(r.fotoUrl)} className={`w-7 h-7 flex items-center justify-center rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white border border-zinc-700 ${isFilePdf(r.fotoUrl) ? 'text-rose-400' : ''}`}>{isFilePdf(r.fotoUrl) ? <FileIcon size={12}/> : <ImageIcon size={12}/>}</button>}
                           <button onClick={() => scanReceiptIA(r)} disabled={scanningId === r.id} className="w-7 h-7 flex items-center justify-center rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-sky-400 border border-zinc-700">{scanningId === r.id ? <Loader2 size={12} className="animate-spin"/> : <Scan size={12}/>}</button>
                           <button onClick={() => openManualVerify(r)} className="w-7 h-7 flex items-center justify-center rounded bg-zinc-800 hover:bg-emerald-600 text-zinc-400 hover:text-white border border-transparent hover:border-emerald-500/50"><Check size={12}/></button>
                       </div>
@@ -652,7 +582,7 @@ export default function App() {
                 onClick={() => setActiveTab('ghost')} 
                 className={`pb-3 text-[11px] font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2 ${activeTab === 'ghost' ? 'border-violet-500 text-violet-300' : 'border-transparent text-zinc-500 hover:text-violet-400'}`}
               >
-                  <BrainCircuit size={14}/> INTERBANCARIAS (OCR) <span className={`px-1.5 rounded text-[9px] font-bold ${ghostMatches.length > 0 ? 'bg-violet-500 text-white animate-pulse' : 'bg-zinc-800 text-zinc-400'}`}>{ghostMatches.length}</span>
+                  <BrainCircuit size={14}/> OCR FANTASMA (SOLO DUDOSOS) <span className={`px-1.5 rounded text-[9px] font-bold ${ghostMatches.length > 0 ? 'bg-violet-500 text-white animate-pulse' : 'bg-zinc-800 text-zinc-400'}`}>{ghostMatches.length}</span>
               </button>
            </div>
 
@@ -688,6 +618,7 @@ export default function App() {
                      <span className="text-[10px] text-zinc-400 truncate font-medium flex items-center gap-1" title={m.bank.depositor}>{m.bank.esInterbancaria && <Landmark size={12} className="text-amber-500"/>}{m.bank.depositor}</span>
                      
                      {/* ETIQUETAS DE ESTADO */}
+                     {(m.status === 'fraud' || m.status === 'reused') && <div className="mt-2 p-2 bg-rose-900/30 border border-rose-500/50 rounded text-[10px] text-rose-200 font-black flex items-center gap-2"><AlertOctagon size={14}/> ALERTA DE FRAUDE</div>}
                      {m.status === 'ocr_triangulation' && <div className="mt-2 p-2 bg-violet-900/20 border border-violet-500/30 rounded text-[9px] text-violet-300 font-bold leading-tight flex items-center gap-2 shadow-sm"><ScanEye size={12} className="shrink-0"/><span>MATCH FOTO &lt;-&gt; ATLETA</span></div>}
                      {m.status === 'manual_review' && <div className="mt-2 p-2 bg-yellow-900/20 border border-yellow-500/30 rounded text-[9px] text-yellow-400 font-bold leading-tight flex items-center gap-2"><Scale size={12} className="shrink-0"/><span>POSIBLE (NOMBRE)</span></div>}
                      {m.status === 'amount_match' && <div className="mt-2 p-2 bg-blue-900/20 border border-blue-500/30 rounded text-[9px] text-blue-400 font-bold leading-tight flex items-center gap-2"><HelpCircle size={12} className="shrink-0"/><span>POSIBLE (MONTO)</span></div>}
@@ -708,7 +639,7 @@ export default function App() {
                                               <span className="block text-[8px] font-bold text-zinc-600 uppercase mb-0.5">NOMBRE ATLETA</span>
                                               <span className="font-bold text-zinc-200 text-sm leading-tight flex items-center gap-2">{r.nombre}</span>
                                           </div>
-                                          {r.fotoUrl && <button onClick={() => setSelectedImage(r.fotoUrl)} className="text-[9px] bg-zinc-800 px-2 py-1 rounded text-zinc-400 hover:text-white border border-transparent hover:border-zinc-600 flex items-center gap-1 uppercase font-bold tracking-wider"><Eye size={10}/> Ver Doc</button>}
+                                          {r.fotoUrl && <button onClick={() => setSelectedImage(r.fotoUrl)} className={`text-[9px] px-2 py-1 rounded border flex items-center gap-1 uppercase font-bold tracking-wider ${isFilePdf(r.fotoUrl) ? 'bg-rose-900/20 text-rose-400 border-rose-500/20' : 'bg-zinc-800 text-zinc-400 border-zinc-700'}`}>{isFilePdf(r.fotoUrl) ? <FileIcon size={10}/> : <Eye size={10}/>} {isFilePdf(r.fotoUrl) ? 'PDF' : 'VER'}</button>}
                                       </div>
                                       
                                       {/* SI ES MATCH FANTASMA, MOSTRAMOS LA EVIDENCIA */}
@@ -740,7 +671,7 @@ export default function App() {
                   <div className="w-24 p-2 flex items-center justify-center bg-zinc-950/30 border-l border-zinc-800/50">
                      {m.status === 'verified' ? (
                         <div className="flex flex-col items-center text-emerald-500 gap-1"><CheckCircle2 size={24}/><span className="text-[9px] font-bold">LISTO</span></div>
-                     ) : m.records.length > 0 ? (
+                     ) : m.records.length > 0 && m.status !== 'fraud' && m.status !== 'reused' ? (
                         <button onClick={() => confirmInCRM(m)} className={`w-full h-full rounded-lg text-[10px] font-black uppercase transition-all flex flex-col items-center justify-center leading-tight gap-1 shadow-lg active:scale-95 group-hover:scale-105 
                             ${m.status === 'ocr_triangulation' 
                                 ? 'bg-violet-600 hover:bg-violet-500 text-white shadow-violet-900/20' // Botón VIOLETA para los fantasmas
@@ -757,7 +688,30 @@ export default function App() {
            </div>
         </div>
 
-        {selectedImage && <div className="fixed inset-0 z-[99999] bg-zinc-950/95 flex flex-col items-center justify-center p-8 backdrop-blur-md cursor-zoom-out" onClick={() => setSelectedImage(null)}><img src={selectedImage} className="max-w-full max-h-full rounded-lg border border-zinc-700 shadow-2xl"/></div>}
+        {selectedImage && (
+            <div className="fixed inset-0 z-[99999] bg-zinc-950/95 flex flex-col items-center justify-center p-8 backdrop-blur-md" onClick={() => setSelectedImage(null)}>
+                <div className="relative w-full h-full max-w-5xl max-h-[90vh] flex flex-col bg-zinc-900 border border-zinc-700 rounded-lg overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
+                    <div className="h-10 bg-zinc-800 flex justify-between items-center px-4 border-b border-zinc-700 shrink-0">
+                        <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
+                           {isFilePdf(selectedImage) ? <FileIcon size={14}/> : <ImageIcon size={14}/>}
+                           {isFilePdf(selectedImage) ? 'VISOR DE PDF' : 'VISOR DE IMAGEN'}
+                        </span>
+                        <div className="flex gap-2">
+                            <button onClick={() => window.open(selectedImage, '_blank')} className="text-xs bg-sky-600 hover:bg-sky-500 text-white px-3 py-1 rounded flex items-center gap-1 font-bold"><ExternalLink size={12}/> ABRIR ORIGINAL</button>
+                            <button onClick={() => setSelectedImage(null)} className="text-zinc-400 hover:text-white"><XCircle size={18}/></button>
+                        </div>
+                    </div>
+                    <div className="flex-1 bg-zinc-950 relative overflow-hidden flex items-center justify-center">
+                        {isFilePdf(selectedImage) ? (
+                            <iframe src={selectedImage} className="w-full h-full border-0" title="PDF Viewer"></iframe>
+                        ) : (
+                            // REFERRER POLICY AGREGADO PARA QUE AIRTABLE NO BLOQUEE LA IMAGEN
+                            <img src={selectedImage} className="max-w-full max-h-full object-contain" referrerPolicy="no-referrer" alt="Comprobante" />
+                        )}
+                    </div>
+                </div>
+            </div>
+        )}
         
         {verifyModalOpen && activeVerifyRecords.length > 0 && (
             <div className="fixed inset-0 z-[99999] bg-zinc-950/80 flex items-center justify-center p-4 backdrop-blur-md">
