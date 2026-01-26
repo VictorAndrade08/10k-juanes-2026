@@ -1,6 +1,0 @@
-name = "10k-juanes-2026"
-main = "dist/index.js" # O el punto de entrada de tu worker
-
-[assets]
-directory = "./dist" # O tu carpeta de build real
-binding = "ASSETS"
