@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken, Auth, User as FirebaseUser } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, onSnapshot, getDoc, Firestore } from 'firebase/firestore';
@@ -11,13 +11,13 @@ import {
   Fingerprint, Zap, Info, CreditCard, Share2, XCircle, AlertOctagon, Hash, Calendar,
   Maximize2, Database, Image as ImageIcon, User, Wallet, FileWarning, Unlock, LogOut,
   Users, Accessibility, LayoutDashboard, ChevronRight, Check, Landmark, Tag, CheckCircle, 
-  File as FileIcon, // Importación corregida para evitar conflictos
+  File as FileIcon,
   ThumbsUp, Eraser, Users2, Contact, BadgeAlert, ArrowLeftRight, FileSearch, CheckCheck, Play, 
   Zap as ZapFast, FileX, Scale, HelpCircle, EyeOff, BrainCircuit, GripHorizontal, ScanEye, 
-  Layers, Ghost, ListFilter, ExternalLink 
+  Layers, Ghost, ListFilter, ExternalLink, Sparkles, Menu, ClipboardPaste, X
 } from 'lucide-react';
 
-// --- CONFIGURACIÓN FIREBASE ---
+// --- CONFIGURACIÓN FIREBASE ROBUSTA ---
 let app: FirebaseApp | undefined;
 let auth: Auth | undefined;
 let db: Firestore | undefined;
@@ -46,16 +46,36 @@ try {
     app = getApps().length === 0 ? initializeApp(config) : getApp();
     auth = getAuth(app);
     db = getFirestore(app);
+  } else {
+    console.warn("⚠️ Firebase no configurado (Modo Offline/Demo)");
   }
 } catch (error) {
   console.error("🔥 Error Inicializando Firebase:", error);
 }
 
-const GEMINI_KEY = typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_GEMINI_API_KEY || "") : "";
+// --- GESTIÓN DE API KEYS ---
+const ENV_GEMINI_KEY = typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_GEMINI_API_KEY || "") : "";
+const ENV_AIRTABLE_KEY = typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_AIRTABLE_API_KEY || "") : "";
+const ENV_AIRTABLE_BASE = typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID || "appA0xfrSZyNTgiLV") : "appA0xfrSZyNTgiLV";
+const ENV_AIRTABLE_TABLE = typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_AIRTABLE_TABLE_ID || "CRM 10k") : "CRM 10k";
+
 const AIRTABLE_CONFIG_KEY = 'verificador_ruta_3_juanes_config';
 const ACCESS_PIN = "1026"; 
 const PRICE_FULL = 30.00;
 const PRICE_DISCOUNT = 20.00;
+
+// --- PALABRAS DE RUIDO BANCARIO (PARA LIMPIEZA PROFUNDA) ---
+const BANK_NOISE_WORDS = [
+  "TRANSFERENCIA", "TRASPASO", "DEP", "DEPOSITO", "CONST", "RECAUDACION", 
+  "PAGO", "EFECTIVO", "CTA", "AHORRO", "CORRIENTE", "SPI", "INTERBANCARIO", 
+  "INTERBANCARIA", "BANCO", "PICHINCHA", "GUAYAQUIL", "PRODUBANCO", 
+  "PACIFICO", "BOLIVARIANO", "INTERNACIONAL", "AUSTRO", "LOJA", "RUMIÑAHUI", 
+  "SOLIDARIO", "JEFERSON", "24ONLINE", "MOVIL", "WEB", "APP", "CASH", 
+  "MANAGEMENT", "SERVICES", "DEL", "LOS", "LAS", "POR", "PARA", "ENVIADO", 
+  "DESDE", "DIRECTO", "VENTANILLA", "REFERENCIA", "CONCEPTO", "BENEFICIARIO",
+  "ORDENANTE", "VALOR", "FECHA", "TRANSF", "BCE", "ONLINE", "LOCAL", "RECIBIDA",
+  "CTA.", "AH.", "CTE.", "PROD.", "GUAY.", "PICH.", "BOLIV."
+];
 
 // --- TIPOS ---
 interface Record {
@@ -114,16 +134,57 @@ const areDocsStrictlyEqual = (ocrDoc: string | null, bankDoc: string) => {
     const cleanOCR = cleanDocNumber(ocrDoc);
     const cleanBank = cleanDocNumber(bankDoc);
     if (!cleanOCR || !cleanBank) return false;
-    return cleanOCR === cleanBank || cleanBank.endsWith(cleanOCR) || cleanOCR.endsWith(cleanBank);
+    // Match flexible para números largos (evita errores por ceros extra)
+    if (cleanOCR.length > 4 && cleanBank.length > 4) {
+        return cleanOCR.includes(cleanBank) || cleanBank.includes(cleanOCR);
+    }
+    return cleanOCR === cleanBank;
 };
 
 const normalizeText = (text: string) => text ? text.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9]/g, " ").replace(/\s+/g, " ").trim() : "";
 
+// --- NUEVA FUNCIÓN: Distancia Levenshtein para typos ---
+const levenshteinDistance = (s: string, t: string) => {
+  if (!s.length) return t.length;
+  if (!t.length) return s.length;
+  const arr = [];
+  for (let i = 0; i <= t.length; i++) {
+    arr[i] = [i];
+    for (let j = 1; j <= s.length; j++) {
+      arr[i][j] =
+        i === 0
+          ? j
+          : Math.min(
+              arr[i - 1][j] + 1,
+              arr[i][j - 1] + 1,
+              arr[i - 1][j - 1] + (s[j - 1] === t[i - 1] ? 0 : 1)
+            );
+    }
+  }
+  return arr[t.length][s.length];
+};
+
+const getCleanTokens = (text: string) => {
+    return normalizeText(text)
+        .split(' ')
+        .filter(w => {
+            // Filtrar ruido, pero mantener nombres cortos reales (ej: ANA, LUZ) si no están en la lista de ruido
+            return w.length >= 2 && !BANK_NOISE_WORDS.includes(w) && !/^\d+$/.test(w);
+        }); 
+};
+
 const parseMontoIA = (val: any) => {
     if (typeof val === 'number') return val;
     if (!val) return 0;
-    const str = String(val).replace('$', '').replace(',', '.').replace(/[^\d.]/g, '');
-    return parseFloat(str) || 0;
+    let str = String(val).replace('$', '').trim();
+    if (str.includes(',') && str.includes('.')) {
+        if (str.lastIndexOf(',') > str.lastIndexOf('.')) str = str.replace(/\./g, '').replace(',', '.'); 
+        else str = str.replace(/,/g, '');
+    } else {
+        str = str.replace(',', '.');
+    }
+    const clean = parseFloat(str.replace(/[^\d.]/g, ''));
+    return isNaN(clean) ? 0 : clean;
 };
 
 export default function App() {
@@ -133,14 +194,15 @@ export default function App() {
   const [isMounted, setIsMounted] = useState(false);
   const [user, setUser] = useState<FirebaseUser | null>(null);
   
-  // PESTAÑAS: 'standard' (Match directo + OCR) | 'ghost' (Solo montos dudosos)
   const [activeTab, setActiveTab] = useState<'standard' | 'ghost'>('standard');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const [config, setConfig] = useState({
-    apiKey: (typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_AIRTABLE_API_KEY : '') || '',
-    baseId: (typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID : '') || 'appA0xfrSZyNTgiLV',
-    tableName: (typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_AIRTABLE_TABLE_ID : '') || 'CRM 10k',
-    filterStage: 'Inscrito Pago x Verificar'
+    apiKey: '',
+    baseId: ENV_AIRTABLE_BASE,
+    tableName: ENV_AIRTABLE_TABLE,
+    filterStage: 'Inscrito Pago x Verificar',
+    geminiKey: '' 
   });
 
   const [isConfigOpen, setIsConfigOpen] = useState(false);
@@ -171,8 +233,17 @@ export default function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        setConfig(prev => ({ ...prev, ...parsed, apiKey: parsed.apiKey || config.apiKey }));
-      } catch (e) {}
+        setConfig(prev => ({ 
+            ...prev, 
+            ...parsed, 
+            apiKey: parsed.apiKey || ENV_AIRTABLE_KEY,
+            geminiKey: parsed.geminiKey || ENV_GEMINI_KEY
+        }));
+      } catch (e) {
+          setConfig(prev => ({ ...prev, apiKey: ENV_AIRTABLE_KEY, geminiKey: ENV_GEMINI_KEY }));
+      }
+    } else {
+        setConfig(prev => ({ ...prev, apiKey: ENV_AIRTABLE_KEY, geminiKey: ENV_GEMINI_KEY }));
     }
   }, []);
 
@@ -208,21 +279,41 @@ export default function App() {
   const handleUnlock = (e: React.FormEvent) => { e.preventDefault(); if (pinInput === ACCESS_PIN) { setIsLocked(false); setPinError(false); } else { setPinError(true); setPinInput(""); setTimeout(() => setPinError(false), 2000); } };
   const handleLock = () => { setIsLocked(true); setPinInput(""); };
   const showStatus = (type: 'success' | 'error', message: string) => { setStatus({ type, message }); setTimeout(() => setStatus({ type: '', message: '' }), 4000); };
-  const saveConfig = (e: React.FormEvent) => { e.preventDefault(); localStorage.setItem(AIRTABLE_CONFIG_KEY, JSON.stringify(config)); setIsConfigOpen(false); showStatus('success', 'Configuración guardada.'); };
+  
+  const saveConfig = (e: React.FormEvent) => { 
+      e.preventDefault(); 
+      localStorage.setItem(AIRTABLE_CONFIG_KEY, JSON.stringify(config)); 
+      setIsConfigOpen(false); 
+      showStatus('success', 'Configuración guardada.'); 
+  };
+
+  const handlePaste = async () => {
+      try {
+          const text = await navigator.clipboard.readText();
+          setBankData(prev => prev ? prev + '\n' + text : text);
+          showStatus('success', 'Datos pegados del portapapeles.');
+      } catch (err) {
+          showStatus('error', 'Permiso de portapapeles denegado.');
+      }
+  };
   
   const urlToBase64 = async (url: string) => {
     try {
       if (isFilePdf(url)) return null;
-      const response = await fetch(url, { mode: 'cors', referrerPolicy: 'no-referrer' }).catch(() => null);
-      if (!response || !response.ok) return null;
+      const response = await fetch(url, { method: 'GET', mode: 'cors', credentials: 'omit', referrerPolicy: 'no-referrer' });
+      if (!response.ok) throw new Error("Fetch failed");
       const blob = await response.blob();
       return new Promise<{ data: string; mimeType: string } | null>((resolve) => {
         const reader = new FileReader();
-        reader.onloadend = () => resolve({ data: (reader.result as string).split(',')[1], mimeType: blob.type || "image/jpeg" });
+        reader.onloadend = () => {
+            const res = reader.result as string;
+            const data = res.includes(',') ? res.split(',')[1] : res;
+            resolve({ data, mimeType: blob.type || "image/jpeg" });
+        };
         reader.onerror = () => resolve(null);
         reader.readAsDataURL(blob);
       });
-    } catch { return null; }
+    } catch (e) { return null; }
   };
 
   const fetchAirtableRecords = async () => {
@@ -231,11 +322,11 @@ export default function App() {
     try {
       let allRecords: any[] = [];
       let offset = null;
-
       do {
          const offsetParam: string = offset ? `&offset=${offset}` : '';
          const url = `https://api.airtable.com/v0/${config.baseId}/${encodeURIComponent(config.tableName)}?filterByFormula=${encodeURIComponent(`{Etapa}='${config.filterStage}'`)}${offsetParam}`;
          const response = await fetch(url, { headers: { Authorization: `Bearer ${config.apiKey}` } });
+         if (!response.ok) throw new Error(`Airtable Error`);
          const data = await response.json();
          if (data.records) allRecords = [...allRecords, ...data.records];
          offset = data.offset;
@@ -256,75 +347,75 @@ export default function App() {
         })));
         showStatus('success', `${allRecords.length} atletas cargados.`);
       }
-    } catch (e) { showStatus('error', 'Error conectando con Airtable.'); } finally { setLoading(false); }
+    } catch (e) { showStatus('error', 'Error Airtable.'); } finally { setLoading(false); }
   };
 
   const scanReceiptIA = async (record: Record) => {
     if (!record.fotoUrl) return;
     if (isFilePdf(record.fotoUrl)) { showStatus('error', 'PDF detectado: Revisión manual requerida.'); return; }
-
-    const apiKeyToUse = GEMINI_KEY || config.apiKey;
-    if (!apiKeyToUse || (apiKeyToUse.startsWith('pat') && !GEMINI_KEY)) return; 
-
+    const activeGeminiKey = config.geminiKey || ENV_GEMINI_KEY;
+    
     setAirtableRecords(prev => prev.map(r => r.id === record.id ? { ...r, statusIA: 'escaneando' } : r));
 
     try {
       const imageData = await urlToBase64(record.fotoUrl);
       if (!imageData) throw new Error("CORS");
-      
-      const prompt = `Extrae datos del comprobante.
-      1. DOCUMENTO: Número de referencia/control (solo dígitos).
-      2. MONTO: Valor total pagado.
-      3. NOMBRE: Nombre del ordenante/depositante.
-      JSON Output: {"documento": "12345", "monto": 30.00, "nombre": "VICTOR HUGO"}`;
+      const prompt = `Analiza este comprobante bancario.
+      Extrae datos para conciliación contable.
+      OUTPUT JSON ESTRICTO:
+      {
+        "documento": "string (solo dígitos del número de referencia/control/comprobante)",
+        "monto": number (valor total exacto, usa punto para decimales),
+        "nombre": "string (nombre del ordenante o quien transfiere, en mayúsculas)",
+        "tipo": "string (TRANSFERENCIA | DEPOSITO | OTRO)"
+      }
+      Reglas: Si hay varios números, busca 'Documento', 'Referencia', 'Control'. Ignora signos de moneda. Si no encuentras, null.`;
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_KEY}`, {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${activeGeminiKey}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: imageData.mimeType, data: imageData.data } }] }] })
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: imageData.mimeType, data: imageData.data } }] }], generationConfig: { temperature: 0.1, responseMimeType: "application/json" } })
       });
+      if (!response.ok) throw new Error("Gemini Error");
       const result = await response.json();
-      const text = result.candidates?.[0]?.content?.parts?.[0]?.text.replace(/```json/g, '').replace(/```/g, '').trim();
-      const json = JSON.parse(text || "{}");
-      
+      let json;
+      try {
+        const rawText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+        json = JSON.parse(rawText || "{}");
+      } catch (e) {
+          const rawText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+          const cleanText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+          json = JSON.parse(cleanText || "{}");
+      }
       const docId = json.documento ? String(json.documento).replace(/\D/g, '') : null;
       const montoClean = parseMontoIA(json.monto);
-      
-      setAirtableRecords(prev => prev.map(r => r.id === record.id ? { 
-          ...r, 
-          docExtraido: docId, montoExtraido: montoClean, 
-          nombreExtraido: json.nombre ? String(json.nombre).toUpperCase() : null, 
-          tipoComprobante: json.tipo || 'DIGITAL', statusIA: docId ? 'listo' : 'error' 
-      } : r));
-    } catch (e) { 
-        setAirtableRecords(prev => prev.map(r => r.id === record.id ? { ...r, statusIA: 'error' } : r)); 
-    }
+      setAirtableRecords(prev => prev.map(r => r.id === record.id ? { ...r, docExtraido: docId, montoExtraido: montoClean, nombreExtraido: json.nombre ? String(json.nombre).toUpperCase() : null, tipoComprobante: json.tipo || 'DIGITAL', statusIA: docId ? 'listo' : 'error' } : r));
+    } catch (e) { setAirtableRecords(prev => prev.map(r => r.id === record.id ? { ...r, statusIA: 'error' } : r)); }
   };
 
   const scanAll = async () => {
     setIsScanningAll(true);
     const pendings = airtableRecords.filter(r => r.fotoUrl && r.statusIA === 'pendiente' && !isFilePdf(r.fotoUrl));
+    if (pendings.length === 0) { setIsScanningAll(false); return showStatus('error', 'No hay pendientes.'); }
     setScanProgress({ current: 0, total: pendings.length });
-    const BATCH_SIZE = 5; 
-    
+    const BATCH_SIZE = 3; 
     for (let i = 0; i < pendings.length; i += BATCH_SIZE) {
         const batch = pendings.slice(i, i + BATCH_SIZE);
         await Promise.all(batch.map(r => scanReceiptIA(r)));
         setScanProgress(prev => ({ ...prev, current: Math.min(prev.current + batch.length, prev.total) }));
     }
-    
     setIsScanningAll(false); setScanProgress({ current: 0, total: 0 });
     showStatus('success', 'Escaneo Turbo completado.');
   };
 
   const processMatches = () => {
     if (!bankData.trim()) return showStatus('error', 'Faltan datos del banco.');
-
-    const regex = /(AG\.|OFICINA)[\s\S]+?(\d{6,})\s+([\s\S]+?)\s+C\s+(\d{1,5}[.,]\d{2})/g;
+    const bankEntries: any[] = [];
+    const rawData = bankData;
+    const regex = /(AG\.|OFICINA|CNB)[\s\S]+?(\d{6,})\s+([\s\S]+?)\s+C\s+(\d{1,5}[.,]\d{2})/g;
     let match;
-    const bankEntries = [];
-    const rawData = bankData; 
-
+    let foundRegex = false;
     while ((match = regex.exec(rawData)) !== null) {
+      foundRegex = true;
       const docNum = match[2];
       const rawDesc = match[3].replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
       const depositor = rawDesc.replace(/TRANSFERENC.*?DE\s+|DEP\s+CNB\s+|CONST\.\s+RECAUDACION\s+/i, '').trim();
@@ -332,14 +423,25 @@ export default function App() {
       const esInterbancaria = /INTERB|SPI|OTROS BANCOS|TRANSF\.|BCE|EN LINEA|ONLINE|TRANSFERENCIA/i.test(rawDesc);
       if (monto > 0) bankEntries.push({ documento: docNum, monto, depositor, esInterbancaria, esDuplicadoBanco: false });
     }
-
-    if (bankEntries.length === 0) {
-        const lines = bankData.split('\n');
-        lines.forEach(l => {
-            const m = l.match(/(\d{6,}).*?C\s+(\d+[.,]\d{2})/);
-            if(m) bankEntries.push({ documento: m[1], monto: parseFloat(m[2].replace(',', '.')), depositor: l.substring(0, 50), esInterbancaria: true, esDuplicadoBanco: false });
+    if (!foundRegex || bankEntries.length === 0) {
+        const lines = rawData.split(/\n/);
+        lines.forEach(line => {
+            if (line.trim().length < 5) return;
+            const docMatch = line.match(/(\d{6,})/);
+            const montoMatch = line.match(/(\d+[.,]\d{2})(?!\d)/);
+            if (docMatch && montoMatch) {
+                const docNum = docMatch[1];
+                const montoVal = parseFloat(montoMatch[1].replace(',', '.'));
+                const isDate = docNum.startsWith('202') && docNum.length === 8;
+                if (!isDate && montoVal > 0) {
+                     let desc = line.replace(docNum, '').replace(montoMatch[1], '').trim();
+                     desc = desc.replace(/^[\s\t\d-]+/, '').substring(0, 100); 
+                     bankEntries.push({ documento: docNum, monto: montoVal, depositor: desc || "SIN DESCRIPCION", esInterbancaria: /INTERB|SPI|BCE/i.test(line), esDuplicadoBanco: false });
+                }
+            }
         });
     }
+    if (bankEntries.length === 0) return showStatus('error', 'No se pudieron detectar transacciones.');
 
     const assignedIds = new Set();
     const newMatches = bankEntries.map(bank => {
@@ -347,17 +449,14 @@ export default function App() {
           if(!r.docExtraido) return false;
           return areDocsStrictlyEqual(r.docExtraido, bank.documento);
       });
-      
       let matchType: MatchResult['matchType'] = 'none';
       let status: MatchResult['status'] = 'missing';
 
-      // 1. MATCH PERFECTO
       if (matchedRecords.length > 0) {
           matchType = 'documento'; 
           status = 'found'; 
           matchedRecords.forEach(r => assignedIds.add(r.id));
       } else {
-          // 2. OCR TRIANGULACIÓN (INTELIGENTE)
           const foundByOCR = airtableRecords.find(r => {
               if (assignedIds.has(r.id)) return false;
               if (r.statusIA !== 'listo' || !r.montoExtraido || !r.nombreExtraido) return false;
@@ -367,26 +466,45 @@ export default function App() {
               const crmParts = crmName.split(/\s+/).filter(p => p.length > 2);
               return amountMatch && crmParts.some(part => ocrName.includes(part));
           });
-
           if (foundByOCR) {
-              matchedRecords = [foundByOCR]; 
-              matchType = 'ocr_ghost'; 
-              status = 'ocr_triangulation'; // ESTO HACE QUE SE VAYA AL MAIN
-              assignedIds.add(foundByOCR.id);
+              matchedRecords = [foundByOCR]; matchType = 'ocr_ghost'; status = 'ocr_triangulation'; assignedIds.add(foundByOCR.id);
           } else {
              const foundByName = airtableRecords.find(r => {
                  if (assignedIds.has(r.id)) return false;
-                 const bankParts = normalizeText(bank.depositor).split(/\s+/).filter(p => p.length > 3);
-                 if(bankParts.length === 0) return false;
-                 const crmName = normalizeText(r.nombre);
-                 let hits = 0;
-                 bankParts.forEach(p => { if(crmName.includes(p)) hits++; });
-                 return hits >= 1;
+                 const cleanBankTokens = getCleanTokens(bank.depositor);
+                 const crmTokens = getCleanTokens(r.nombre);
+                 if(cleanBankTokens.length === 0 || crmTokens.length === 0) return false;
+                 let matches = 0;
+                 let strongMatches = 0;
+                 cleanBankTokens.forEach(bt => {
+                     crmTokens.forEach(ct => {
+                         // MEJORA: Comparación exacta O fuzzy (distancia <= 1 para typos)
+                         if (ct === bt) { 
+                             matches++; 
+                             if (ct.length > 3) strongMatches++; 
+                         } 
+                         else if (ct.includes(bt) && bt.length > 4) { 
+                             matches++; 
+                         }
+                         // LEVENSHTEIN: Detectar errores de dedo (ej: 'VICTOR' vs 'VCTOR')
+                         else if (bt.length > 3 && ct.length > 3 && levenshteinDistance(bt, ct) <= 1) {
+                             matches++;
+                             strongMatches++;
+                         }
+                     });
+                 });
+                 const amountMatch = Math.abs(r.valorEsperado - bank.monto) < 0.1;
+                 if (amountMatch && matches >= 1) return true;
+                 if (strongMatches >= 2) return true; 
+                 return false; 
              });
-             if(foundByName) { matchedRecords = [foundByName]; matchType = 'nombre_only'; status = 'manual_review'; }
+             if(foundByName) { 
+                 matchedRecords = [foundByName]; 
+                 matchType = 'nombre_only'; 
+                 status = Math.abs(foundByName.valorEsperado - bank.monto) < 0.1 ? 'amount_match' : 'manual_review'; 
+             }
           }
       }
-
       const cleanBankDoc = cleanDocNumber(bank.documento);
       const historical = historicalDocs[cleanBankDoc];
       if (historical) {
@@ -396,28 +514,19 @@ export default function App() {
              if (bank.monto >= totalExpected - 1) status = 'reused'; 
           }
       }
-
       let paymentStatus: 'correct' | 'underpaid' | 'overpaid' = 'correct';
       let isGroupPayment = false;
       let totalExpectedValue = 0;
-
       if (matchedRecords.length > 0) {
          totalExpectedValue = matchedRecords.reduce((sum, r) => sum + r.valorEsperado, 0);
          if (matchedRecords.length > 1 || bank.monto >= matchedRecords[0].valorEsperado * 1.8) isGroupPayment = true;
          if (bank.monto < totalExpectedValue - 0.5) paymentStatus = 'underpaid';
          else if (bank.monto > totalExpectedValue + 5 && !isGroupPayment) paymentStatus = 'overpaid';
       }
-
-      return {
-        bank, records: matchedRecords, status, matchType, claimedBy: historical?.atleta,
-        nameMismatch: false, isFamily: false, isGroupPayment, paymentStatus, estimatedPeople: 1, confidenceScore: 0,
-        totalExpectedValue, isInvertedOrder: false, isStrongNameMatch: false
-      };
+      return { bank, records: matchedRecords, status, matchType, claimedBy: historical?.atleta, nameMismatch: false, isFamily: false, isGroupPayment, paymentStatus, estimatedPeople: 1, confidenceScore: 0, totalExpectedValue, isInvertedOrder: false, isStrongNameMatch: false };
     });
-
     setMatches(newMatches as any);
     if (newMatches.length > 0) showStatus('success', `Procesadas ${newMatches.length} filas.`);
-    else showStatus('error', 'Sin datos detectados en el texto.');
   };
 
   const confirmInCRM = async (match: any) => {
@@ -429,12 +538,11 @@ export default function App() {
       const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'verified_receipts', docIdClean);
       const docSnap = await getDoc(docRef);
       if (docSnap.exists() && !match.isGroupPayment) { showStatus('error', 'FRAUDE: Doc usado.'); setLoading(false); return; }
-
       for (const record of match.records) {
           let label = 'MATCH';
-          if (match.status === 'ocr_triangulation') label = 'INTERBANCARIA (VALIDADO X FOTO)';
+          if (match.status === 'ocr_triangulation') label = 'INTERBANCARIA (FOTO)';
           else if (match.matchType === 'documento') label = 'OCR DOC EXACTO';
-          
+          else if (match.status === 'amount_match') label = 'VALIDADO X MONTO Y NOMBRE';
           await fetch(`https://api.airtable.com/v0/${config.baseId}/${encodeURIComponent(config.tableName)}/${record.id}`, {
             method: 'PATCH', headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ fields: { 'Etapa': 'Inscrito', 'Numero Comprobante': documento, 'Comentarios': `✅ VALIDADO [${new Date().toLocaleDateString()}] ${label} - Ref: ${documento} | $${monto}` } })
@@ -442,27 +550,23 @@ export default function App() {
       }
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'verified_receipts', docIdClean), { atleta: match.records.map((r:any)=>r.nombre).join(', '), fecha: new Date().toISOString(), monto, uid: user.uid });
       setMatches(prev => prev.map(m => m.bank.documento === documento ? { ...m, status: 'verified' } : m));
+      const processedIds = match.records.map((r: any) => r.id);
+      setAirtableRecords(prev => prev.filter(r => !processedIds.includes(r.id)));
       showStatus('success', `Validado: ${documento}`);
     } catch (e) { showStatus('error', 'Error al guardar.'); } finally { setLoading(false); }
   };
 
   const handleBulkConfirm = async () => {
       const perfectMatches = matches.filter(m => m.status === 'found' && m.paymentStatus !== 'underpaid');
-      if(perfectMatches.length === 0) return showStatus('error', 'No hay coincidencias seguras.');
-      if(!confirm(`¿Procesar ${perfectMatches.length} pagos SEGUROS?`)) return;
+      if(perfectMatches.length === 0) return showStatus('error', 'No hay seguros.');
+      if(!confirm(`¿Procesar ${perfectMatches.length} pagos?`)) return;
       setLoading(true);
       for (const match of perfectMatches) { await confirmInCRM(match); }
       setLoading(false);
-      showStatus('success', `Se validaron ${perfectMatches.length} pagos.`);
+      showStatus('success', `Validados ${perfectMatches.length}.`);
   };
 
-  const openManualVerify = (record: Record) => {
-    setActiveVerifyRecords([record]);
-    setManualDocId(record.docExtraido || "");
-    setManualAmount(record.montoExtraido?.toString() || record.valorEsperado.toString());
-    setVerifyModalOpen(true);
-  };
-
+  const openManualVerify = (record: Record) => { setActiveVerifyRecords([record]); setManualDocId(record.docExtraido || ""); setManualAmount(record.montoExtraido?.toString() || record.valorEsperado.toString()); setVerifyModalOpen(true); };
   const executeManualVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !db || activeVerifyRecords.length === 0) return;
@@ -472,10 +576,7 @@ export default function App() {
     setLoading(true);
     try {
       for (const record of activeVerifyRecords) {
-          await fetch(`https://api.airtable.com/v0/${config.baseId}/${encodeURIComponent(config.tableName)}/${record.id}`, {
-            method: 'PATCH', headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fields: { 'Etapa': 'Inscrito', 'Numero Comprobante': docIdOriginal, 'Comentarios': `✅ MANUAL [${new Date().toLocaleDateString()}] - $${monto}` } })
-          });
+          await fetch(`https://api.airtable.com/v0/${config.baseId}/${encodeURIComponent(config.tableName)}/${record.id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: { 'Etapa': 'Inscrito', 'Numero Comprobante': docIdOriginal, 'Comentarios': `✅ MANUAL [${new Date().toLocaleDateString()}] - $${monto}` } }) });
       }
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'verified_receipts', docIdClean), { atleta: activeVerifyRecords[0].nombre, fecha: new Date().toISOString(), monto, manual: true });
       setAirtableRecords(prev => prev.filter(r => !activeVerifyRecords.includes(r)));
@@ -483,27 +584,24 @@ export default function App() {
     } catch (e) { showStatus('error', 'Error manual.'); } finally { setLoading(false); }
   };
 
-  const filteredRecords = airtableRecords.filter(r => r.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || r.cedula.includes(searchTerm));
+  const filteredRecords = useMemo(() => airtableRecords.filter(r => r.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || r.cedula.includes(searchTerm)), [airtableRecords, searchTerm]);
   const perfectMatchesCount = matches.filter(m => m.status === 'found' && m.paymentStatus !== 'underpaid').length;
 
   if (!isMounted) return null;
   if (isLocked) return <LockScreen pin={pinInput} setPin={setPinInput} error={pinError} unlock={handleUnlock} />;
 
-  // --- LOGICA DE TABS CORREGIDA ---
-  // AHORA: regularMatches incluye 'ocr_triangulation' para que aparezcan en la principal.
-  const regularMatches = matches.filter(m => m.status !== 'amount_match');
-  const ghostMatches = matches.filter(m => m.status === 'amount_match');
-  
+  const regularMatches = matches.filter(m => m.status !== 'manual_review');
+  const ghostMatches = matches.filter(m => m.status === 'manual_review');
   let displayedMatches = activeTab === 'standard' ? regularMatches : ghostMatches;
 
-  // --- SORTING FINAL: PERFECTOS -> OCR -> FRAUDE -> RESTO ---
   displayedMatches.sort((a, b) => {
       const getPriority = (status: string) => {
-          if (status === 'found') return -2; // 1ro: PERFECTOS
-          if (status === 'ocr_triangulation') return -1; // 2do: OCR INTELIGENTE
-          if (status === 'fraud' || status === 'reused') return 0; // 3ro: FRAUDE
-          if (status === 'verified') return 9; // ULTIMO: Verificados
-          return 1; // 4to: Resto
+          if (status === 'found') return -3;
+          if (status === 'ocr_triangulation') return -2;
+          if (status === 'amount_match') return -1;
+          if (status === 'fraud' || status === 'reused') return 0; 
+          if (status === 'verified') return 9; 
+          return 1;
       };
       return getPriority(a.status) - getPriority(b.status);
   });
@@ -513,10 +611,12 @@ export default function App() {
       <style>{`header,footer,nav{display:none!important}main{padding-top:0!important}body{overflow:hidden!important;background:#09090b}`}</style>
       
       {/* HEADER */}
-      <div className="h-16 border-b border-zinc-800 bg-zinc-900/50 backdrop-blur-xl flex justify-between items-center px-6 shrink-0 z-20">
+      <div className="h-16 border-b border-zinc-800 bg-zinc-900/50 backdrop-blur-xl flex justify-between items-center px-4 md:px-6 shrink-0 z-20">
           <div className="flex items-center gap-3">
-             <div className="bg-sky-500/10 p-2 rounded-lg border border-sky-500/20"><ShieldCheck size={20} className="text-sky-400"/></div>
-             <div><h1 className="text-sm font-black uppercase tracking-widest text-white leading-none">Búnker 10k</h1><span className="text-[10px] font-medium text-zinc-500 tracking-wider">SISTEMA ANTI-FRAUDE STRICT</span></div>
+             {/* MOBILE HAMBURGER */}
+             <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden text-zinc-400 hover:text-white"><Menu size={20}/></button>
+             <div className="bg-sky-500/10 p-2 rounded-lg border border-sky-500/20 hidden md:block"><ShieldCheck size={20} className="text-sky-400"/></div>
+             <div><h1 className="text-sm font-black uppercase tracking-widest text-white leading-none">Búnker 10k</h1><span className="text-[10px] font-medium text-zinc-500 tracking-wider hidden sm:inline-block">SISTEMA ANTI-FRAUDE STRICT</span></div>
           </div>
           <div className="flex gap-2">
              <HeaderBtn onClick={fetchAirtableRecords} icon={RefreshCw} label={loading ? "CARGANDO..." : "RECARGAR"} spin={loading} />
@@ -526,17 +626,13 @@ export default function App() {
       </div>
 
       <div className="flex-1 flex gap-0 h-full min-h-0 relative">
-        <div className="w-[320px] border-r border-zinc-800 flex flex-col bg-zinc-900/30 hidden lg:flex backdrop-blur-sm">
-           <div className="p-3 border-b border-zinc-800 flex flex-col gap-3 bg-zinc-900/50">
-              <div className="flex justify-between items-center"><span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2"><Users size={14}/> ATLETAS ({airtableRecords.length})</span><button onClick={scanAll} disabled={isScanningAll || airtableRecords.length === 0} className="text-[10px] px-2 py-1.5 rounded bg-sky-600 hover:bg-sky-500 text-white shadow-lg shadow-sky-900/20 transition-all flex items-center gap-1 font-black tracking-wide border border-sky-500">{isScanningAll ? <Loader2 className="animate-spin" size={12}/> : <ZapFast size={12}/>} ESCANEAR TURBO</button></div>
-              {/* BARRA DE PROGRESO */}
-              {isScanningAll && (
-                  <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden relative mt-2">
-                      <div className="h-full bg-emerald-500 transition-all duration-300" style={{ width: `${(scanProgress.current / scanProgress.total) * 100}%` }}></div>
-                  </div>
-              )}
+        {/* SIDEBAR LIST (Responsive Drawer for Mobile) */}
+        <div className={`fixed inset-y-0 left-0 z-50 w-72 bg-zinc-950 border-r border-zinc-800 transform transition-transform duration-300 lg:relative lg:translate-x-0 lg:flex lg:flex-col lg:bg-zinc-900/30 lg:backdrop-blur-sm ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+           <div className="p-3 border-b border-zinc-800 flex flex-col gap-3 bg-zinc-900/50 relative">
+              <button onClick={() => setMobileMenuOpen(false)} className="absolute top-2 right-2 lg:hidden text-zinc-500"><X size={16}/></button>
+              <div className="flex justify-between items-center pt-2 lg:pt-0"><span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2"><Users size={14}/> ATLETAS ({airtableRecords.length})</span><button onClick={scanAll} disabled={isScanningAll || airtableRecords.length === 0} className="text-[10px] px-2 py-1.5 rounded bg-sky-600 hover:bg-sky-500 text-white shadow-lg shadow-sky-900/20 transition-all flex items-center gap-1 font-black tracking-wide border border-sky-500">{isScanningAll ? <Loader2 className="animate-spin" size={12}/> : <ZapFast size={12}/>} ESCANEAR TURBO</button></div>
+              {isScanningAll && ( <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden relative mt-2"><div className="h-full bg-emerald-500 transition-all duration-300" style={{ width: `${(scanProgress.current / scanProgress.total) * 100}%` }}></div></div> )}
               {isScanningAll && <div className="text-[9px] text-right text-emerald-500 font-mono font-bold mt-1">{scanProgress.current} / {scanProgress.total}</div>}
-              
               <div className="relative group mt-2"><div className="absolute inset-y-0 left-2.5 flex items-center pointer-events-none text-zinc-500"><Search size={12}/></div><input type="text" className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-zinc-300 focus:border-sky-500/50 focus:ring-1 focus:ring-sky-500/20 outline-none transition-all placeholder:text-zinc-600 font-medium" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/></div>
            </div>
            <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2">
@@ -547,7 +643,7 @@ export default function App() {
                       <div className="flex-1 min-w-0"><span className="font-bold text-zinc-200 block text-[11px] mb-0.5 truncate uppercase" title={r.nombre}>{r.nombre}</span><span className="text-[10px] text-zinc-500 font-mono flex items-center gap-1"><Hash size={10}/> {r.cedula}</span></div>
                       <div className="flex items-center gap-1">
                           {r.fotoUrl && <button onClick={() => setSelectedImage(r.fotoUrl)} className={`w-7 h-7 flex items-center justify-center rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white border border-zinc-700 ${isFilePdf(r.fotoUrl) ? 'text-rose-400' : ''}`}>{isFilePdf(r.fotoUrl) ? <FileIcon size={12}/> : <ImageIcon size={12}/>}</button>}
-                          <button onClick={() => scanReceiptIA(r)} disabled={scanningId === r.id} className="w-7 h-7 flex items-center justify-center rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-sky-400 border border-zinc-700">{scanningId === r.id ? <Loader2 size={12} className="animate-spin"/> : <Scan size={12}/>}</button>
+                          <button onClick={() => scanReceiptIA(r)} disabled={scanningId === r.id} className="w-7 h-7 flex items-center justify-center rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-sky-400 border border-zinc-700">{scanningId === r.id ? <Loader2 size={12} className="animate-spin"/> : <Sparkles size={12}/>}</button>
                           <button onClick={() => openManualVerify(r)} className="w-7 h-7 flex items-center justify-center rounded bg-zinc-800 hover:bg-emerald-600 text-zinc-400 hover:text-white border border-transparent hover:border-emerald-500/50"><Check size={12}/></button>
                       </div>
                    </div>
@@ -556,132 +652,86 @@ export default function App() {
               ))}
            </div>
         </div>
+        {mobileMenuOpen && <div className="fixed inset-0 z-40 bg-black/50 lg:hidden backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)}></div>}
 
         <div className="flex-1 flex flex-col bg-zinc-950 relative">
            <div className="p-4 border-b border-zinc-800 bg-zinc-900/20 flex gap-4 h-24 items-center shrink-0 z-10">
               <div className="flex-1 h-full relative group">
                   <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-zinc-600"><FileText size={16}/></div>
-                  <textarea className="w-full h-full bg-zinc-950 border border-zinc-800 rounded-xl pl-10 pr-10 p-3 text-xs font-mono text-zinc-300 resize-none focus:border-sky-500/50 focus:ring-1 focus:ring-sky-900/50 outline-none leading-tight transition-all shadow-inner" placeholder="Pega aquí el reporte del banco..." value={bankData} onChange={(e) => setBankData(e.target.value)}/>
-                  {bankData && <button onClick={() => setBankData("")} className="absolute top-3 right-3 text-zinc-600 hover:text-white bg-zinc-900 hover:bg-rose-500/20 rounded p-1 transition-all"><Eraser size={14}/></button>}
+                  <textarea className="w-full h-full bg-zinc-950 border border-zinc-800 rounded-xl pl-10 pr-16 p-3 text-xs font-mono text-zinc-300 resize-none focus:border-sky-500/50 focus:ring-1 focus:ring-sky-900/50 outline-none leading-tight transition-all shadow-inner placeholder:text-zinc-700" placeholder="Pegar reporte bancario aquí..." value={bankData} onChange={(e) => setBankData(e.target.value)}/>
+                  <div className="absolute top-2 right-2 flex gap-1">
+                      <button onClick={handlePaste} className="text-zinc-500 hover:text-sky-400 bg-zinc-900/80 p-1.5 rounded-md hover:bg-zinc-800 border border-zinc-800 transition-all" title="Pegar del portapapeles"><ClipboardPaste size={14}/></button>
+                      {bankData && <button onClick={() => setBankData("")} className="text-zinc-500 hover:text-rose-400 bg-zinc-900/80 p-1.5 rounded-md hover:bg-zinc-800 border border-zinc-800 transition-all"><Eraser size={14}/></button>}
+                  </div>
               </div>
               <div className="flex flex-col gap-2 h-full justify-center">
-                  <button ref={runBtnRef} onClick={processMatches} className="flex-1 px-8 bg-gradient-to-br from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-black text-xs rounded-lg uppercase tracking-wider flex flex-col justify-center items-center gap-1 shadow-xl shadow-indigo-900/20 active:scale-95 transition-all border border-sky-500/20"><ArrowRight size={18}/> <span className="text-[10px] opacity-80">EJECUTAR</span></button>
-                  {perfectMatchesCount > 0 && <button ref={bulkBtnRef} onClick={handleBulkConfirm} className="flex-1 px-4 bg-emerald-600/10 hover:bg-emerald-600/20 border border-emerald-500/30 text-emerald-400 hover:text-emerald-300 font-bold text-[10px] rounded-lg uppercase tracking-wide flex items-center justify-center gap-2 transition-all"><CheckCheck size={14}/> VALIDAR {perfectMatchesCount} PERFECTOS</button>}
+                  <button ref={runBtnRef} onClick={processMatches} className="flex-1 px-6 bg-gradient-to-br from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-black text-xs rounded-lg uppercase tracking-wider flex flex-col justify-center items-center gap-1 shadow-xl shadow-indigo-900/20 active:scale-95 transition-all border border-sky-500/20"><ArrowRight size={18}/> <span className="text-[10px] opacity-80 hidden md:block">EJECUTAR</span></button>
+                  {perfectMatchesCount > 0 && <button ref={bulkBtnRef} onClick={handleBulkConfirm} className="flex-1 px-4 bg-emerald-600/10 hover:bg-emerald-600/20 border border-emerald-500/30 text-emerald-400 hover:text-emerald-300 font-bold text-[10px] rounded-lg uppercase tracking-wide flex items-center justify-center gap-2 transition-all"><CheckCheck size={14}/> <span className="hidden md:inline">VALIDAR</span> {perfectMatchesCount}</button>}
               </div>
            </div>
 
-           {/* --- PESTAÑAS PARA SEPARAR INTERBANCARIAS FANTASMA --- */}
-           <div className="flex border-b border-zinc-800 bg-zinc-950 px-4 pt-4 gap-6">
-              <button 
-                onClick={() => setActiveTab('standard')} 
-                className={`pb-3 text-[11px] font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2 ${activeTab === 'standard' ? 'border-sky-500 text-white' : 'border-transparent text-zinc-500 hover:text-zinc-400'}`}
-              >
-                  <Layers size={14}/> DIRECTOS (PICHINCHA) <span className="bg-zinc-800 px-1.5 rounded text-[9px] text-zinc-400">{regularMatches.length}</span>
-              </button>
-              <button 
-                onClick={() => setActiveTab('ghost')} 
-                className={`pb-3 text-[11px] font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2 ${activeTab === 'ghost' ? 'border-violet-500 text-violet-300' : 'border-transparent text-zinc-500 hover:text-violet-400'}`}
-              >
-                  <BrainCircuit size={14}/> OCR FANTASMA (SOLO DUDOSOS) <span className={`px-1.5 rounded text-[9px] font-bold ${ghostMatches.length > 0 ? 'bg-violet-500 text-white animate-pulse' : 'bg-zinc-800 text-zinc-400'}`}>{ghostMatches.length}</span>
-              </button>
+           <div className="flex border-b border-zinc-800 bg-zinc-950 px-4 pt-4 gap-6 overflow-x-auto no-scrollbar">
+              <button onClick={() => setActiveTab('standard')} className={`pb-3 text-[11px] font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'standard' ? 'border-sky-500 text-white' : 'border-transparent text-zinc-500 hover:text-zinc-400'}`}><Layers size={14}/> COINCIDENCIAS <span className="bg-zinc-800 px-1.5 rounded text-[9px] text-zinc-400">{regularMatches.length}</span></button>
+              <button onClick={() => setActiveTab('ghost')} className={`pb-3 text-[11px] font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'ghost' ? 'border-violet-500 text-violet-300' : 'border-transparent text-zinc-500 hover:text-violet-400'}`}><BrainCircuit size={14}/> REVISIÓN MANUAL <span className={`px-1.5 rounded text-[9px] font-bold ${ghostMatches.length > 0 ? 'bg-violet-500 text-white animate-pulse' : 'bg-zinc-800 text-zinc-400'}`}>{ghostMatches.length}</span></button>
            </div>
 
            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3 bg-zinc-950">
               {displayedMatches.length === 0 && <div className="h-full flex flex-col items-center justify-center text-zinc-800 gap-4"><LayoutDashboard size={64} strokeWidth={0.5} className="opacity-20"/><span className="text-xs font-bold uppercase tracking-widest opacity-40">No hay coincidencias en esta pestaña</span></div>}
-              
               {displayedMatches.map((m, i) => (
                 <div key={i} className={`flex items-stretch rounded-xl border transition-all text-sm h-auto min-h-[5rem] shadow-lg relative overflow-hidden group 
                     ${m.status === 'verified' ? 'bg-zinc-900/30 border-emerald-900/30 opacity-60' 
                     : m.status === 'fraud' ? 'bg-rose-950/10 border-rose-900/40' 
-                    : m.status === 'ocr_triangulation' ? 'bg-violet-950/10 border-violet-500/30' // Estilo especial VIOLETA
+                    : m.status === 'ocr_triangulation' ? 'bg-violet-950/10 border-violet-500/30' 
+                    : m.status === 'amount_match' ? 'bg-blue-950/10 border-blue-500/30' 
                     : m.status === 'manual_review' ? 'bg-yellow-950/10 border-yellow-600/40'
-                    : m.status === 'amount_match' ? 'bg-blue-950/10 border-blue-600/40'
                     : 'bg-zinc-900/80 border-zinc-800 hover:border-zinc-700'}`}>
                   
                   <div className={`w-1.5 shrink-0 
                       ${m.status === 'verified' ? 'bg-emerald-500' 
                       : m.status === 'fraud' ? 'bg-rose-500' 
-                      : m.status === 'ocr_triangulation' ? 'bg-violet-500 animate-pulse' // Barra Violeta
+                      : m.status === 'ocr_triangulation' ? 'bg-violet-500 animate-pulse' 
+                      : m.status === 'amount_match' ? 'bg-blue-500' 
                       : m.status === 'manual_review' ? 'bg-yellow-500'
-                      : m.status === 'amount_match' ? 'bg-blue-500'
                       : m.isGroupPayment ? 'bg-violet-500' 
                       : m.paymentStatus === 'underpaid' ? 'bg-amber-500' 
                       : m.status === 'found' ? 'bg-sky-500' 
                       : 'bg-zinc-700'}`}></div>
 
-                  <div className="w-[240px] p-4 border-r border-zinc-800/50 flex flex-col justify-center shrink-0 bg-zinc-900/50">
+                  <div className="w-[180px] md:w-[240px] p-3 md:p-4 border-r border-zinc-800/50 flex flex-col justify-center shrink-0 bg-zinc-900/50">
                      <div className="flex justify-between items-baseline mb-2">
                         <span className="text-[9px] font-black text-zinc-600 uppercase tracking-wider">BANCO</span>
                         <span className={`font-mono font-bold text-sm ${m.paymentStatus === 'underpaid' ? 'text-amber-500' : 'text-emerald-400'}`}>${m.bank.monto.toFixed(2)}</span>
                      </div>
-                     <span className="font-mono text-white font-bold tracking-tight text-sm mb-1">{m.bank.documento}</span>
+                     <span className="font-mono text-white font-bold tracking-tight text-xs md:text-sm mb-1 truncate">{m.bank.documento}</span>
                      <span className="text-[10px] text-zinc-400 truncate font-medium flex items-center gap-1" title={m.bank.depositor}>{m.bank.esInterbancaria && <Landmark size={12} className="text-amber-500"/>}{m.bank.depositor}</span>
                      
-                     {/* ETIQUETAS DE ESTADO */}
-                     {(m.status === 'fraud' || m.status === 'reused') && <div className="mt-2 p-2 bg-rose-900/30 border border-rose-500/50 rounded text-[10px] text-rose-200 font-black flex items-center gap-2"><AlertOctagon size={14}/> ALERTA DE FRAUDE</div>}
-                     {m.status === 'ocr_triangulation' && <div className="mt-2 p-2 bg-violet-900/20 border border-violet-500/30 rounded text-[9px] text-violet-300 font-bold leading-tight flex items-center gap-2 shadow-sm"><ScanEye size={12} className="shrink-0"/><span>MATCH FOTO &lt;-&gt; ATLETA</span></div>}
-                     {m.status === 'manual_review' && <div className="mt-2 p-2 bg-yellow-900/20 border border-yellow-500/30 rounded text-[9px] text-yellow-400 font-bold leading-tight flex items-center gap-2"><Scale size={12} className="shrink-0"/><span>POSIBLE (NOMBRE)</span></div>}
-                     {m.status === 'amount_match' && <div className="mt-2 p-2 bg-blue-900/20 border border-blue-500/30 rounded text-[9px] text-blue-400 font-bold leading-tight flex items-center gap-2"><HelpCircle size={12} className="shrink-0"/><span>POSIBLE (MONTO)</span></div>}
+                     {(m.status === 'fraud' || m.status === 'reused') && <div className="mt-2 p-1.5 md:p-2 bg-rose-900/30 border border-rose-500/50 rounded text-[9px] text-rose-200 font-black flex items-center gap-2"><AlertOctagon size={14}/> FRAUDE</div>}
+                     {m.status === 'ocr_triangulation' && <div className="mt-2 p-1.5 md:p-2 bg-violet-900/20 border border-violet-500/30 rounded text-[9px] text-violet-300 font-bold leading-tight flex items-center gap-2 shadow-sm"><ScanEye size={12} className="shrink-0"/><span>MATCH FOTO</span></div>}
+                     {m.status === 'manual_review' && <div className="mt-2 p-1.5 md:p-2 bg-yellow-900/20 border border-yellow-500/30 rounded text-[9px] text-yellow-400 font-bold leading-tight flex items-center gap-2"><Scale size={12} className="shrink-0"/><span>POSIBLE (NOMBRE)</span></div>}
+                     {m.status === 'amount_match' && <div className="mt-2 p-1.5 md:p-2 bg-blue-900/20 border border-blue-500/30 rounded text-[9px] text-blue-400 font-bold leading-tight flex items-center gap-2"><HelpCircle size={12} className="shrink-0"/><span>POSIBLE</span></div>}
                   </div>
-                  <div className="flex-1 p-4 flex flex-col justify-center relative">
+                  <div className="flex-1 p-2 md:p-4 flex flex-col justify-center relative">
                      {m.records.length > 0 ? (
-                        <>
-                           {m.status === 'ocr_triangulation' && (
-                               <div className="mb-2">
-                                   <span className="text-[9px] font-bold text-violet-400 uppercase tracking-wider block mb-1">DATAZO DE LA FOTO:</span>
-                               </div>
-                           )}
-                           <div className="flex flex-col gap-2 w-full">
+                        <div className="flex flex-col gap-2 w-full">
                               {m.records.map((r, idx) => (
                                   <div key={idx} className={`p-2 rounded-lg border flex flex-col gap-1.5 relative overflow-hidden ${m.status === 'ocr_triangulation' ? 'bg-zinc-950/60 border-violet-500/30' : 'bg-zinc-950/40 border-zinc-800/50'}`}>
                                       <div className="flex justify-between items-center pr-4">
                                           <div className="flex flex-col">
-                                              <span className="block text-[8px] font-bold text-zinc-600 uppercase mb-0.5">NOMBRE ATLETA</span>
-                                              <span className="font-bold text-zinc-200 text-sm leading-tight flex items-center gap-2">{r.nombre}</span>
+                                              <span className="block text-[8px] font-bold text-zinc-600 uppercase mb-0.5">ATLETA</span>
+                                              <span className="font-bold text-zinc-200 text-xs md:text-sm leading-tight flex items-center gap-2">{r.nombre}</span>
                                           </div>
                                           {r.fotoUrl && <button onClick={() => setSelectedImage(r.fotoUrl)} className={`text-[9px] px-2 py-1 rounded border flex items-center gap-1 uppercase font-bold tracking-wider ${isFilePdf(r.fotoUrl) ? 'bg-rose-900/20 text-rose-400 border-rose-500/20' : 'bg-zinc-800 text-zinc-400 border-zinc-700'}`}>{isFilePdf(r.fotoUrl) ? <FileIcon size={10}/> : <Eye size={10}/>} {isFilePdf(r.fotoUrl) ? 'PDF' : 'VER'}</button>}
                                       </div>
-                                      
-                                      {/* SI ES MATCH FANTASMA, MOSTRAMOS LA EVIDENCIA */}
-                                      {m.status === 'ocr_triangulation' && (
-                                          <div className="grid grid-cols-2 gap-2 text-[9px] bg-zinc-950/50 p-1.5 rounded border border-violet-500/20 mt-1">
-                                              <div className="text-zinc-400">OCR Nombre: <span className="text-violet-300 font-bold">{r.nombreExtraido}</span></div>
-                                              <div className="text-zinc-400">OCR Monto: <span className="text-violet-300 font-bold">${r.montoExtraido}</span></div>
-                                          </div>
-                                      )}
-
-                                      {/* DATOS NORMALES */}
-                                      {m.status !== 'ocr_triangulation' && (
-                                        <div className="grid grid-cols-4 gap-2 text-[10px] text-zinc-500 bg-zinc-900/50 p-1.5 rounded border border-zinc-800/30">
-                                            <div><span className="block font-bold text-zinc-600 text-[8px] uppercase tracking-wider">Cédula</span><span className="font-mono text-zinc-300">{r.cedula}</span></div>
-                                            <div><span className="block font-bold text-zinc-600 text-[8px] uppercase tracking-wider">Edad</span><span className="font-mono text-zinc-300">{r.edad} años</span></div>
-                                            <div><span className="block font-bold text-zinc-600 text-[8px] uppercase tracking-wider">Valor Esp.</span><span className={`font-mono font-bold ${r.valorEsperado < 30 ? 'text-emerald-400' : 'text-zinc-300'}`}>${r.valorEsperado.toFixed(2)}</span></div>
-                                            {r.docExtraido && <div><span className={`block font-bold text-[8px] uppercase tracking-wider ${m.matchType === 'documento' ? 'text-emerald-500' : 'text-rose-500'}`}>OCR DETECTADO</span><span className={`font-mono font-bold ${m.matchType === 'documento' ? 'text-emerald-200' : 'text-rose-300 line-through'}`}>{r.docExtraido}</span></div>}
-                                        </div>
-                                      )}
+                                      {m.status === 'ocr_triangulation' && <div className="grid grid-cols-2 gap-2 text-[9px] bg-zinc-950/50 p-1.5 rounded border border-violet-500/20 mt-1"><div className="text-zinc-400">OCR Nombre: <span className="text-violet-300 font-bold">{r.nombreExtraido}</span></div><div className="text-zinc-400">OCR Monto: <span className="text-violet-300 font-bold">${r.montoExtraido}</span></div></div>}
+                                      {m.status !== 'ocr_triangulation' && <div className="grid grid-cols-4 gap-2 text-[9px] md:text-[10px] text-zinc-500 bg-zinc-900/50 p-1.5 rounded border border-zinc-800/30"><div><span className="block font-bold text-zinc-600 text-[8px] uppercase tracking-wider">Cédula</span><span className="font-mono text-zinc-300">{r.cedula}</span></div><div><span className="block font-bold text-zinc-600 text-[8px] uppercase tracking-wider">Edad</span><span className="font-mono text-zinc-300">{r.edad}</span></div><div><span className="block font-bold text-zinc-600 text-[8px] uppercase tracking-wider">Valor</span><span className={`font-mono font-bold ${r.valorEsperado < 30 ? 'text-emerald-400' : 'text-zinc-300'}`}>${r.valorEsperado.toFixed(2)}</span></div>{r.docExtraido && <div><span className={`block font-bold text-[8px] uppercase tracking-wider ${m.matchType === 'documento' ? 'text-emerald-500' : 'text-rose-500'}`}>OCR</span><span className={`font-mono font-bold ${m.matchType === 'documento' ? 'text-emerald-200' : 'text-rose-300 line-through'}`}>{r.docExtraido}</span></div>}</div>}
                                   </div>
                               ))}
-                           </div>
-                        </>
-                     ) : (
-                        <div className="flex flex-col items-center justify-center h-full text-zinc-700 gap-1 opacity-50"><FileWarning size={20}/> <span className="text-[10px] font-bold">SIN COINCIDENCIA</span></div>
-                     )}
-                     {m.status === 'fraud' && <div className="absolute inset-0 bg-rose-950/80 backdrop-blur-[1px] flex items-center justify-center z-10"><div className="bg-rose-950/90 border border-rose-500/30 text-rose-200 px-4 py-2 rounded-lg font-black text-xs flex items-center gap-2 shadow-2xl"><AlertOctagon size={16} className="text-rose-500"/> <span>ALERTA DE FRAUDE: YA USADO</span></div></div>}
+                        </div>
+                     ) : <div className="flex flex-col items-center justify-center h-full text-zinc-700 gap-1 opacity-50"><FileWarning size={20}/> <span className="text-[10px] font-bold">SIN COINCIDENCIA</span></div>}
+                     {m.status === 'fraud' && <div className="absolute inset-0 bg-rose-950/80 backdrop-blur-[1px] flex items-center justify-center z-10"><div className="bg-rose-950/90 border border-rose-500/30 text-rose-200 px-4 py-2 rounded-lg font-black text-xs flex items-center gap-2 shadow-2xl"><AlertOctagon size={16} className="text-rose-500"/> <span>ALERTA DE FRAUDE</span></div></div>}
                   </div>
                   <div className="w-24 p-2 flex items-center justify-center bg-zinc-950/30 border-l border-zinc-800/50">
-                     {m.status === 'verified' ? (
-                        <div className="flex flex-col items-center text-emerald-500 gap-1"><CheckCircle2 size={24}/><span className="text-[9px] font-bold">LISTO</span></div>
-                     ) : m.records.length > 0 && m.status !== 'fraud' && m.status !== 'reused' ? (
-                        <button onClick={() => confirmInCRM(m)} className={`w-full h-full rounded-lg text-[10px] font-black uppercase transition-all flex flex-col items-center justify-center leading-tight gap-1 shadow-lg active:scale-95 group-hover:scale-105 
-                            ${m.status === 'ocr_triangulation' 
-                                ? 'bg-violet-600 hover:bg-violet-500 text-white shadow-violet-900/20' // Botón VIOLETA para los fantasmas
-                                : m.paymentStatus === 'underpaid' 
-                                    ? 'bg-amber-600 hover:bg-amber-500' 
-                                    : 'bg-emerald-600 hover:bg-emerald-500'} text-white shadow-emerald-900/20`}>
-                           {m.status === 'ocr_triangulation' ? <GripHorizontal size={20}/> : <Check size={20} strokeWidth={3}/>}
-                           <span>{m.status === 'ocr_triangulation' ? 'CONFIRMAR' : (m.paymentStatus === 'underpaid' ? 'MANUAL' : 'OK')}</span>
-                        </button>
-                     ) : <div className="text-[9px] font-bold text-zinc-600 text-center flex flex-col items-center gap-1 opacity-50"><XCircle size={14}/> <span>MANUAL</span></div>}
+                     {m.status === 'verified' ? ( <div className="flex flex-col items-center text-emerald-500 gap-1"><CheckCircle2 size={24}/><span className="text-[9px] font-bold">LISTO</span></div> ) : m.records.length > 0 && m.status !== 'fraud' && m.status !== 'reused' ? ( <button onClick={() => confirmInCRM(m)} className={`w-full h-full rounded-lg text-[10px] font-black uppercase transition-all flex flex-col items-center justify-center leading-tight gap-1 shadow-lg active:scale-95 group-hover:scale-105 active:rotate-1 ${m.status === 'ocr_triangulation' ? 'bg-violet-600 hover:bg-violet-500 text-white shadow-violet-900/20' : m.status === 'amount_match' ? 'bg-blue-600 hover:bg-blue-500' : m.paymentStatus === 'underpaid' ? 'bg-amber-600 hover:bg-amber-500' : 'bg-emerald-600 hover:bg-emerald-500'} text-white shadow-emerald-900/20`}>{m.status === 'ocr_triangulation' ? <GripHorizontal size={20}/> : <Check size={20} strokeWidth={3}/>}<span>{m.status === 'ocr_triangulation' ? 'CONFIRMAR' : (m.paymentStatus === 'underpaid' ? 'MANUAL' : 'OK')}</span></button> ) : <div className="text-[9px] font-bold text-zinc-600 text-center flex flex-col items-center gap-1 opacity-50"><XCircle size={14}/> <span>MANUAL</span></div>}
                   </div>
                 </div>
               ))}
@@ -691,24 +741,8 @@ export default function App() {
         {selectedImage && (
             <div className="fixed inset-0 z-[99999] bg-zinc-950/95 flex flex-col items-center justify-center p-8 backdrop-blur-md" onClick={() => setSelectedImage(null)}>
                 <div className="relative w-full h-full max-w-5xl max-h-[90vh] flex flex-col bg-zinc-900 border border-zinc-700 rounded-lg overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
-                    <div className="h-10 bg-zinc-800 flex justify-between items-center px-4 border-b border-zinc-700 shrink-0">
-                        <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
-                           {isFilePdf(selectedImage) ? <FileIcon size={14}/> : <ImageIcon size={14}/>}
-                           {isFilePdf(selectedImage) ? 'VISOR DE PDF' : 'VISOR DE IMAGEN'}
-                        </span>
-                        <div className="flex gap-2">
-                            <button onClick={() => window.open(selectedImage, '_blank')} className="text-xs bg-sky-600 hover:bg-sky-500 text-white px-3 py-1 rounded flex items-center gap-1 font-bold"><ExternalLink size={12}/> ABRIR ORIGINAL</button>
-                            <button onClick={() => setSelectedImage(null)} className="text-zinc-400 hover:text-white"><XCircle size={18}/></button>
-                        </div>
-                    </div>
-                    <div className="flex-1 bg-zinc-950 relative overflow-hidden flex items-center justify-center">
-                        {isFilePdf(selectedImage) ? (
-                            <iframe src={selectedImage} className="w-full h-full border-0" title="PDF Viewer"></iframe>
-                        ) : (
-                            // REFERRER POLICY AGREGADO PARA QUE AIRTABLE NO BLOQUEE LA IMAGEN
-                            <img src={selectedImage} className="max-w-full max-h-full object-contain" referrerPolicy="no-referrer" alt="Comprobante" />
-                        )}
-                    </div>
+                    <div className="h-10 bg-zinc-800 flex justify-between items-center px-4 border-b border-zinc-700 shrink-0"><span className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2">{isFilePdf(selectedImage) ? <FileIcon size={14}/> : <ImageIcon size={14}/>} VISOR</span><div className="flex gap-2"><button onClick={() => window.open(selectedImage, '_blank')} className="text-xs bg-sky-600 hover:bg-sky-500 text-white px-3 py-1 rounded flex items-center gap-1 font-bold"><ExternalLink size={12}/> ABRIR</button><button onClick={() => setSelectedImage(null)} className="text-zinc-400 hover:text-white"><XCircle size={18}/></button></div></div>
+                    <div className="flex-1 bg-zinc-950 relative overflow-hidden flex items-center justify-center">{isFilePdf(selectedImage) ? <iframe src={selectedImage} className="w-full h-full border-0" title="PDF Viewer"></iframe> : <img src={selectedImage} className="max-w-full max-h-full object-contain" referrerPolicy="no-referrer" alt="Comprobante" />}</div>
                 </div>
             </div>
         )}
@@ -717,15 +751,12 @@ export default function App() {
             <div className="fixed inset-0 z-[99999] bg-zinc-950/80 flex items-center justify-center p-4 backdrop-blur-md">
                 <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800 w-full max-w-sm shadow-2xl relative">
                     <button onClick={() => setVerifyModalOpen(false)} className="absolute top-4 right-4 text-zinc-500 hover:text-white"><XCircle size={20}/></button>
-                    <div className="flex items-center gap-3 mb-6">
-                        <div className="p-3 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"><CheckCircle2 size={24}/></div>
-                        <div><h2 className="text-sm font-black text-white uppercase tracking-wider">Validación Manual</h2><p className="text-[10px] text-zinc-400 font-medium">Confirma los datos del pago.</p></div>
-                    </div>
+                    <div className="flex items-center gap-3 mb-6"><div className="p-3 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"><CheckCircle2 size={24}/></div><div><h2 className="text-sm font-black text-white uppercase tracking-wider">Validación Manual</h2><p className="text-[10px] text-zinc-400 font-medium">Confirma los datos del pago.</p></div></div>
                     <div className="mb-4 bg-zinc-950/50 p-3 rounded-lg border border-zinc-800/50"><span className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">ATLETA(S)</span><div className="space-y-1">{activeVerifyRecords.map((r, i) => (<div key={i} className="border-b border-zinc-800/50 last:border-0 pb-1 last:pb-0"><span className="block text-sm font-bold text-white">{r.nombre}</span><span className="block text-[10px] text-zinc-500 font-mono mt-0.5">{r.cedula}</span></div>))}</div></div>
                     <form onSubmit={executeManualVerify} className="space-y-4">
-                        <div><label className="text-[10px] text-zinc-500 font-bold uppercase mb-1.5 block">Nro. Documento / Referencia</label><input type="text" className="w-full p-3 bg-zinc-950 border border-zinc-800 rounded-lg text-white focus:border-emerald-500 outline-none text-sm font-mono placeholder:text-zinc-700" value={manualDocId} onChange={e => setManualDocId(e.target.value)} placeholder="Ej: 123456" autoFocus/></div>
-                        <div><label className="text-[10px] text-zinc-500 font-bold uppercase mb-1.5 block">Monto ($)</label><input type="number" step="0.01" className="w-full p-3 bg-zinc-950 border border-zinc-800 rounded-lg text-white focus:border-emerald-500 outline-none text-sm font-mono placeholder:text-zinc-700" value={manualAmount} onChange={e => setManualAmount(e.target.value)} placeholder="0.00"/></div>
-                        <button className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-lg uppercase tracking-widest text-xs transition-all shadow-lg shadow-emerald-900/20 active:scale-95 flex items-center justify-center gap-2"><Check size={16}/> CONFIRMAR PAGO</button>
+                        <div><label className="text-[10px] text-zinc-500 font-bold uppercase mb-1.5 block">Nro. Documento</label><input type="text" className="w-full p-3 bg-zinc-950 border border-zinc-800 rounded-lg text-white focus:border-emerald-500 outline-none text-sm font-mono" value={manualDocId} onChange={e => setManualDocId(e.target.value)} autoFocus/></div>
+                        <div><label className="text-[10px] text-zinc-500 font-bold uppercase mb-1.5 block">Monto ($)</label><input type="number" step="0.01" className="w-full p-3 bg-zinc-950 border border-zinc-800 rounded-lg text-white focus:border-emerald-500 outline-none text-sm font-mono" value={manualAmount} onChange={e => setManualAmount(e.target.value)}/></div>
+                        <button className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-lg uppercase tracking-widest text-xs transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2"><Check size={16}/> CONFIRMAR PAGO</button>
                     </form>
                 </div>
             </div>
@@ -742,11 +773,6 @@ const HeaderBtn = ({ onClick, icon: Icon, label, spin, variant }: any) => (
         <Icon size={14} className={spin ? "animate-spin" : ""} /> {label}
     </button>
 );
-
-const Badge = ({ type, children }: any) => {
-    const styles: any = { warning: 'bg-orange-500/10 text-orange-400 border-orange-500/20', info: 'bg-blue-500/10 text-blue-400 border-blue-500/20', purple: 'bg-violet-500/10 text-violet-400 border-violet-500/20', success: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' };
-    return <span className={`text-[9px] px-2 py-0.5 rounded border font-bold uppercase tracking-wide ${styles[type]}`}>{children}</span>
-};
 
 const LockScreen = ({ pin, setPin, error, unlock }: any) => (
     <div className="fixed inset-0 z-[9999] bg-zinc-950 flex items-center justify-center p-4">
@@ -771,6 +797,7 @@ const ConfigModal = ({ config, setConfig, save, close }: any) => (
             <h2 className="text-sm font-black text-center text-white uppercase tracking-widest mb-6">Configuración del Sistema</h2>
             <form onSubmit={save} className="space-y-4">
                 <div><label className="text-[10px] text-zinc-500 font-bold uppercase mb-1.5 block">Airtable API Key</label><input type="password" className="w-full p-3 bg-zinc-950 border border-zinc-800 rounded-lg text-center text-white focus:border-sky-500 outline-none text-xs font-mono" value={config.apiKey} onChange={e => setConfig({...config, apiKey: e.target.value})} placeholder="pat..." required/></div>
+                <div><label className="text-[10px] text-zinc-500 font-bold uppercase mb-1.5 block">Gemini API Key (Opcional)</label><input type="password" className="w-full p-3 bg-zinc-950 border border-zinc-800 rounded-lg text-center text-white focus:border-sky-500 outline-none text-xs font-mono" value={config.geminiKey} onChange={e => setConfig({...config, geminiKey: e.target.value})} placeholder="Si está vacío usa el global"/></div>
                 <button className="w-full py-3 bg-white hover:bg-zinc-200 text-black font-black rounded-lg uppercase tracking-widest text-xs transition-colors">GUARDAR CAMBIOS</button>
             </form>
         </div>
