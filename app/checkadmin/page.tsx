@@ -11,11 +11,11 @@ import {
   Fingerprint, Zap, Info, CreditCard, Share2, XCircle, AlertOctagon, Hash, Calendar,
   Maximize2, Database, Image as ImageIcon, User, Wallet, FileWarning, Unlock, LogOut,
   Users, Accessibility, LayoutDashboard, ChevronRight, Check, Landmark, Tag, CheckCircle, 
-  File as FileIcon,
+  FileText as FileIcon, // RENOMBRADO PARA EVITAR CONFLICTOS
   ThumbsUp, Eraser, Users2, Contact, BadgeAlert, ArrowLeftRight, FileSearch, CheckCheck, Play, 
   Zap as ZapFast, FileX, Scale, HelpCircle, EyeOff, BrainCircuit, GripHorizontal, ScanEye, 
-  Layers, Ghost, ListFilter, ExternalLink, Sparkles, Menu, ClipboardPaste, X, File,
-  Siren // Icono para alertas de fraude visual
+  Layers, Ghost, ListFilter, ExternalLink, Sparkles, Menu, ClipboardPaste, X, Siren,
+  TrendingUp, DollarSign
 } from 'lucide-react';
 
 // --- CONFIGURACIÓN FIREBASE ROBUSTA ---
@@ -65,7 +65,7 @@ const ACCESS_PIN = "1026";
 const PRICE_FULL = 30.00;
 const PRICE_DISCOUNT = 20.00;
 
-// --- PALABRAS DE RUIDO BANCARIO (PARA LIMPIEZA PROFUNDA) ---
+// --- PALABRAS DE RUIDO BANCARIO ---
 const BANK_NOISE_WORDS = [
   "TRANSFERENCIA", "TRASPASO", "DEP", "DEPOSITO", "CONST", "RECAUDACION", 
   "PAGO", "EFECTIVO", "CTA", "AHORRO", "CORRIENTE", "SPI", "INTERBANCARIO", 
@@ -77,6 +77,41 @@ const BANK_NOISE_WORDS = [
   "ORDENANTE", "VALOR", "FECHA", "TRANSF", "BCE", "ONLINE", "LOCAL", "RECIBIDA",
   "CTA.", "AH.", "CTE.", "PROD.", "GUAY.", "PICH.", "BOLIV."
 ];
+
+// --- UTILIDAD: CONFETTI ---
+const triggerConfetti = () => {
+    const colors = ['#34D399', '#60A5FA', '#F472B6', '#FBBF24'];
+    for (let i = 0; i < 50; i++) {
+        const div = document.createElement('div');
+        div.style.position = 'fixed';
+        div.style.left = '50%';
+        div.style.top = '50%';
+        div.style.width = '8px';
+        div.style.height = '8px';
+        div.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+        div.style.borderRadius = '50%';
+        div.style.pointerEvents = 'none';
+        div.style.zIndex = '9999';
+        document.body.appendChild(div);
+        
+        const angle = Math.random() * Math.PI * 2;
+        const velocity = 2 + Math.random() * 4;
+        let x = 0, y = 0;
+        let opacity = 1;
+        
+        const animate = () => {
+            x += Math.cos(angle) * velocity;
+            y += Math.sin(angle) * velocity;
+            opacity -= 0.02;
+            div.style.transform = `translate(${x}px, ${y}px)`;
+            div.style.opacity = opacity.toString();
+            
+            if (opacity > 0) requestAnimationFrame(animate);
+            else div.remove();
+        };
+        animate();
+    }
+};
 
 // --- TIPOS ---
 interface Record {
@@ -94,7 +129,6 @@ interface Record {
   nombreExtraido: string | null;
   tipoComprobante: string | null;
   fechaExtraida?: string | null; 
-  // Nuevos campos para detección de fraude visual
   esSospechoso?: boolean;
   razonSospecha?: string;
   statusIA: 'pendiente' | 'escaneando' | 'listo' | 'error';
@@ -139,7 +173,6 @@ const areDocsStrictlyEqual = (ocrDoc: string | null, bankDoc: string) => {
     const cleanOCR = cleanDocNumber(ocrDoc);
     const cleanBank = cleanDocNumber(bankDoc);
     if (!cleanOCR || !cleanBank) return false;
-    // Match flexible para números largos
     if (cleanOCR.length > 4 && cleanBank.length > 4) {
         return cleanOCR.includes(cleanBank) || cleanBank.includes(cleanOCR);
     }
@@ -232,9 +265,11 @@ export default function App() {
   const [isMounted, setIsMounted] = useState(false);
   const [user, setUser] = useState<FirebaseUser | null>(null);
   
-  // PESTAÑAS: standard, ghost, unmatched (nueva)
   const [activeTab, setActiveTab] = useState<'standard' | 'ghost' | 'unmatched'>('standard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  // Estado para el visor de archivos (URL segura)
+  const [viewerUrl, setViewerUrl] = useState<string | null>(null);
+  const [viewerType, setViewerType] = useState<'img'|'pdf'>('img');
 
   const [config, setConfig] = useState({
     apiKey: '',
@@ -248,14 +283,13 @@ export default function App() {
   const [airtableRecords, setAirtableRecords] = useState<Record[]>([]);
   const [bankData, setBankData] = useState("");
   const [matches, setMatches] = useState<MatchResult[]>([]);
-  const [matchedRecordIds, setMatchedRecordIds] = useState<Set<string>>(new Set()); // Para saber cuáles YA tienen match
+  const [matchedRecordIds, setMatchedRecordIds] = useState<Set<string>>(new Set()); 
   const [historicalDocs, setHistoricalDocs] = useState<any>({});
   const [loading, setLoading] = useState(false);
   const [scanningId, setScanningId] = useState<string | null>(null);
   const [isScanningAll, setIsScanningAll] = useState(false);
   
   const [scanProgress, setScanProgress] = useState({ current: 0, total: 0 });
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [status, setStatus] = useState({ type: '', message: '' });
   const [searchTerm, setSearchTerm] = useState("");
   
@@ -311,10 +345,15 @@ export default function App() {
     const handleKeyDown = (e: KeyboardEvent) => {
         if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); runBtnRef.current?.click(); }
         if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'Enter') { e.preventDefault(); bulkBtnRef.current?.click(); }
+        if (e.key === 'Escape') {
+            if(viewerUrl) setViewerUrl(null);
+            else if(verifyModalOpen) setVerifyModalOpen(false);
+            else if(isConfigOpen) setIsConfigOpen(false);
+        }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [viewerUrl, verifyModalOpen, isConfigOpen]);
 
   const handleUnlock = (e: React.FormEvent) => { e.preventDefault(); if (pinInput === ACCESS_PIN) { setIsLocked(false); setPinError(false); } else { setPinError(true); setPinInput(""); setTimeout(() => setPinError(false), 2000); } };
   const handleLock = () => { setIsLocked(true); setPinInput(""); };
@@ -331,12 +370,40 @@ export default function App() {
       try {
           const text = await navigator.clipboard.readText();
           setBankData(prev => prev ? prev + '\n' + text : text);
-          showStatus('success', 'Datos pegados del portapapeles.');
+          showStatus('success', 'Datos pegados.');
       } catch (err) {
-          showStatus('error', 'Permiso de portapapeles denegado.');
+          showStatus('error', 'Permiso denegado.');
       }
   };
   
+  const openViewer = async (url: string) => {
+    if (!url) return;
+    const isPdf = isFilePdf(url);
+    setViewerType(isPdf ? 'pdf' : 'img');
+    
+    // Para visualización segura, usamos blob
+    try {
+        const response = await fetch(url, { method: 'GET', mode: 'cors', credentials: 'omit', referrerPolicy: 'no-referrer' });
+        if (response.ok) {
+            const blob = await response.blob();
+            const objectUrl = URL.createObjectURL(blob);
+            setViewerUrl(objectUrl);
+        } else {
+            // Fallback a URL directa si fetch falla
+            setViewerUrl(url); 
+        }
+    } catch(e) {
+        setViewerUrl(url);
+    }
+  };
+
+  const closeViewer = () => {
+      if (viewerUrl && viewerUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(viewerUrl);
+      }
+      setViewerUrl(null);
+  };
+
   const fetchAirtableRecords = useCallback(async () => {
     if (!config.apiKey) return setIsConfigOpen(true);
     setLoading(true);
@@ -394,8 +461,7 @@ export default function App() {
             mimeType = "image/jpeg";
         }
 
-        // PROMPT FORENSE ACTUALIZADO ("Jose de Reddit Edition")
-        const prompt = `Analiza este comprobante de pago con mentalidad de EXPERTO FORENSE.
+        const prompt = `Analiza este comprobante bancario.
         
         TAREA 1: EXTRACCIÓN (Prioridad Alta)
         - documento: Busca 'Documento', 'Referencia', 'Seq', 'Nro'. Solo dígitos.
@@ -403,13 +469,8 @@ export default function App() {
         - nombre: Ordenante.
         - fecha: Fecha de la transacción.
 
-        TAREA 2: DETECCIÓN DE MONTAJE (Nivel 'Jose de Reddit')
-        Busca estas señales sutiles de Photoshop/Generadores:
-        1. "Efecto Parche": ¿El fondo detrás del monto/fecha es de un color sólido perfecto mientras el resto tiene ruido/gradiente?
-        2. "Tipografía Alienígena": ¿El monto usa una fuente distinta (ej: Arial) a las etiquetas del banco? ¿El kerning (espaciado) es irregular?
-        3. "Bordes Sucios": ¿Hay 'halos' o pixelación extraña alrededor solo de los números clave?
-        4. "Incoherencia Temporal": Si es captura de celular, ¿la hora de la barra de estado (arriba) contradice la hora de la transferencia?
-        5. "Alineación": ¿El texto sigue la perspectiva o parece "pegado" encima plano?
+        TAREA 2: DETECCIÓN DE MONTAJE
+        Busca inconsistencias visuales (fuentes distintas, bordes pixelados en montos, fecha vs hora celular).
 
         OUTPUT JSON:
         {
@@ -418,7 +479,7 @@ export default function App() {
             "nombre": "string",
             "fecha": "string",
             "sospecha_fraude": boolean,
-            "razon_sospecha": "string (Breve y directa: 'Fuente distinta en monto', 'Hora celular no cuadra', etc. null si es legítimo)"
+            "razon_sospecha": "string"
         }`;
 
         const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${activeGeminiKey}`, {
@@ -451,7 +512,6 @@ export default function App() {
             montoExtraido: montoClean, 
             nombreExtraido: json.nombre ? String(json.nombre).toUpperCase() : null, 
             fechaExtraida: json.fecha || null,
-            // Guardamos el análisis de fraude
             esSospechoso: json.sospecha_fraude === true,
             razonSospecha: json.razon_sospecha,
             tipoComprobante: isPdf ? 'PDF' : 'IMG', 
@@ -493,7 +553,7 @@ export default function App() {
       const rawDesc = match[3].replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
       const depositor = rawDesc.replace(/TRANSFERENC.*?DE\s+|DEP\s+CNB\s+|CONST\.\s+RECAUDACION\s+/i, '').trim();
       const monto = parseFloat(match[4].replace(',', '.'));
-      // CORRECCIÓN INTERBANCARIA: Solo si dice SPI, BCE, OTROS
+      // CORRECCIÓN INTERBANCARIA: Solo si dice explícitamente SPI, OTROS, BCE
       const esInterbancaria = /SPI|OTROS BANCOS|BCE|INTERB/i.test(rawDesc);
       if (monto > 0) bankEntries.push({ documento: docNum, monto, depositor, esInterbancaria, esDuplicadoBanco: false });
     }
@@ -518,7 +578,7 @@ export default function App() {
     }
     if (bankEntries.length === 0) return showStatus('error', 'No se pudieron detectar transacciones.');
 
-    const newMatchedIds = new Set<string>(); // Para tracking de los NO encontrados
+    const newMatchedIds = new Set<string>();
     const assignedIds = new Set();
     
     const newMatches = bankEntries.map(bank => {
@@ -578,7 +638,6 @@ export default function App() {
           }
       }
 
-      // Verificación Fraude
       const cleanBankDoc = cleanDocNumber(bank.documento);
       const historical = historicalDocs[cleanBankDoc];
       if (historical) {
@@ -608,6 +667,7 @@ export default function App() {
   const confirmInCRM = async (match: any) => {
     if (!user || match.records.length === 0 || !db) return;
     setLoading(true);
+    triggerConfetti(); // Celebración
     try {
       const { documento, monto } = match.bank;
       const docIdClean = cleanDocNumber(documento);
@@ -647,10 +707,10 @@ export default function App() {
     e.preventDefault();
     if (!user || !db || activeVerifyRecords.length === 0) return;
     const docIdOriginal = manualDocId.trim() || `MANUAL-${Date.now()}`;
-    // Usamos el docID limpio para la key de firebase, pero el original para el comentario
     const docIdClean = cleanDocNumber(docIdOriginal);
     const monto = parseFloat(manualAmount) || 0;
     setLoading(true);
+    triggerConfetti();
     try {
       for (const record of activeVerifyRecords) {
           await fetch(`https://api.airtable.com/v0/${config.baseId}/${encodeURIComponent(config.tableName)}/${record.id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: { 'Etapa': 'Inscrito', 'Numero Comprobante': docIdOriginal, 'Comentarios': `✅ MANUAL [${new Date().toLocaleDateString()}] - $${monto}` } }) });
@@ -663,13 +723,22 @@ export default function App() {
 
   const filteredRecords = useMemo(() => airtableRecords.filter(r => r.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || r.cedula.includes(searchTerm)), [airtableRecords, searchTerm]);
   const perfectMatchesCount = matches.filter(m => m.status === 'found' && m.paymentStatus !== 'underpaid').length;
+  
+  // Dashboard Metrics
+  const totalCollectedToday = useMemo(() => matches.filter(m => m.status === 'verified').reduce((sum, m) => sum + m.bank.monto, 0), [matches]);
+  const pendingAmount = useMemo(() => matches.filter(m => m.status === 'found' || m.status === 'amount_match').reduce((sum, m) => sum + m.bank.monto, 0), [matches]);
 
-  // Filtros de las pestañas
   const regularMatches = matches.filter(m => m.status !== 'manual_review');
   const ghostMatches = matches.filter(m => m.status === 'manual_review');
   
-  // LOGICA PARA "UNMATCHED" (NO EN BANCO)
-  const unmatchedRecords = airtableRecords.filter(r => r.statusIA === 'listo' && !matchedRecordIds.has(r.id));
+  // Modificación CRÍTICA: Mostramos TODOS los atletas que tienen foto pero no match,
+  // INCLUSO si la IA aún no los ha escaneado (statusIA !== 'listo').
+  const unmatchedRecords = useMemo(() => 
+    airtableRecords.filter(r => 
+        r.fotoUrl &&                // Tiene comprobante
+        !matchedRecordIds.has(r.id) // No hizo match con el banco
+    ), 
+  [airtableRecords, matchedRecordIds]);
 
   let displayedMatches = activeTab === 'standard' ? regularMatches : ghostMatches;
 
@@ -699,6 +768,13 @@ export default function App() {
         <div className={`fixed inset-y-0 left-0 z-50 w-72 bg-zinc-950 border-r border-zinc-800 transform transition-transform duration-300 lg:relative lg:translate-x-0 lg:flex lg:flex-col lg:bg-zinc-900/30 lg:backdrop-blur-sm ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
            <div className="p-3 border-b border-zinc-800 flex flex-col gap-3 bg-zinc-900/50 relative">
               <button onClick={() => setMobileMenuOpen(false)} className="absolute top-2 right-2 lg:hidden text-zinc-500"><X size={16}/></button>
+              
+              {/* DASHBOARD STATS */}
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                  <div className="bg-zinc-950 p-2 rounded border border-zinc-800"><span className="text-[9px] text-zinc-500 font-bold block uppercase">Recaudado</span><span className="text-emerald-400 font-mono font-bold text-xs">${totalCollectedToday.toFixed(2)}</span></div>
+                  <div className="bg-zinc-950 p-2 rounded border border-zinc-800"><span className="text-[9px] text-zinc-500 font-bold block uppercase">Pendiente</span><span className="text-amber-400 font-mono font-bold text-xs">${pendingAmount.toFixed(2)}</span></div>
+              </div>
+
               <div className="flex justify-between items-center pt-2 lg:pt-0"><span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2"><Users size={14}/> ATLETAS ({airtableRecords.length})</span><button onClick={scanAll} disabled={isScanningAll || airtableRecords.length === 0} className="text-[10px] px-2 py-1.5 rounded bg-sky-600 hover:bg-sky-500 text-white shadow-lg shadow-sky-900/20 transition-all flex items-center gap-1 font-black tracking-wide border border-sky-500">{isScanningAll ? <Loader2 className="animate-spin" size={12}/> : <ZapFast size={12}/>} ESCANEAR TURBO</button></div>
               {isScanningAll && ( <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden relative mt-2"><div className="h-full bg-emerald-500 transition-all duration-300" style={{ width: `${(scanProgress.current / scanProgress.total) * 100}%` }}></div></div> )}
               {isScanningAll && <div className="text-[9px] text-right text-emerald-500 font-mono font-bold mt-1">{scanProgress.current} / {scanProgress.total}</div>}
@@ -711,7 +787,7 @@ export default function App() {
                    <div className="flex justify-between items-start gap-2">
                       <div className="flex-1 min-w-0"><span className="font-bold text-zinc-200 block text-[11px] mb-0.5 truncate uppercase" title={r.nombre}>{r.nombre}</span><span className="text-[10px] text-zinc-500 font-mono flex items-center gap-1"><Hash size={10}/> {r.cedula}</span></div>
                       <div className="flex items-center gap-1">
-                          {r.fotoUrl && <button onClick={() => setSelectedImage(r.fotoUrl)} className={`w-7 h-7 flex items-center justify-center rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white border border-zinc-700 ${isFilePdf(r.fotoUrl) ? 'text-rose-400' : ''}`}>{isFilePdf(r.fotoUrl) ? <FileIcon size={12}/> : <ImageIcon size={12}/>}</button>}
+                          {r.fotoUrl && <button onClick={() => openViewer(r.fotoUrl || "")} className={`w-7 h-7 flex items-center justify-center rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white border border-zinc-700 ${isFilePdf(r.fotoUrl) ? 'text-rose-400' : ''}`}>{isFilePdf(r.fotoUrl) ? <FileIcon size={12}/> : <ImageIcon size={12}/>}</button>}
                           <button onClick={() => scanReceiptIA(r)} disabled={scanningId === r.id} className="w-7 h-7 flex items-center justify-center rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-sky-400 border border-zinc-700">{scanningId === r.id ? <Loader2 size={12} className="animate-spin"/> : <Sparkles size={12}/>}</button>
                           <button onClick={() => openManualVerify(r)} className="w-7 h-7 flex items-center justify-center rounded bg-zinc-800 hover:bg-emerald-600 text-zinc-400 hover:text-white border border-transparent hover:border-emerald-500/50"><Check size={12}/></button>
                       </div>
@@ -748,30 +824,39 @@ export default function App() {
 
            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3 bg-zinc-950">
               {activeTab === 'unmatched' ? (
-                  /* VISTA DE NO ENCONTRADOS */
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                       {unmatchedRecords.length === 0 && <div className="col-span-full flex flex-col items-center justify-center py-10 text-zinc-700 opacity-50"><FileSearch size={32}/><span className="mt-2 text-xs font-bold uppercase">Todo cruzado correctamente</span></div>}
                       {unmatchedRecords.map(r => (
                           <div key={r.id} className="bg-zinc-900/50 border border-zinc-800 p-4 rounded-xl flex flex-col gap-3 relative overflow-hidden">
                               {r.esSospechoso && <div className="absolute top-0 right-0 bg-rose-500 text-white text-[9px] font-black px-2 py-0.5 rounded-bl-lg uppercase tracking-wider flex items-center gap-1"><Siren size={10}/> POSIBLE FAKE</div>}
                               <div className="flex justify-between items-start">
-                                  <div>
-                                      <span className="text-xs font-bold text-white block mb-0.5">{r.nombre}</span>
-                                      <span className="text-[10px] text-zinc-500 font-mono">{r.cedula}</span>
-                                  </div>
-                                  <button onClick={() => setSelectedImage(r.fotoUrl)} className="text-zinc-400 hover:text-white bg-zinc-800 p-1.5 rounded"><Eye size={14}/></button>
+                                  <div><span className="text-xs font-bold text-white block mb-0.5">{r.nombre}</span><span className="text-[10px] text-zinc-500 font-mono">{r.cedula}</span></div>
+                                  <button onClick={() => openViewer(r.fotoUrl || "")} className="text-zinc-400 hover:text-white bg-zinc-800 p-1.5 rounded"><Eye size={14}/></button>
                               </div>
                               <div className="bg-black/30 p-2 rounded border border-zinc-800/50 grid grid-cols-2 gap-2 text-[10px]">
-                                  <div><span className="block text-zinc-600 font-bold uppercase text-[8px]">Monto IA</span><span className="text-emerald-400 font-mono font-bold">${r.montoExtraido?.toFixed(2)}</span></div>
+                                  <div><span className="block text-zinc-600 font-bold uppercase text-[8px]">Monto IA</span><span className="text-emerald-400 font-mono font-bold">${r.montoExtraido?.toFixed(2) || '0.00'}</span></div>
                                   <div><span className="block text-zinc-600 font-bold uppercase text-[8px]">Doc IA</span><span className="text-zinc-300 font-mono">{r.docExtraido || '---'}</span></div>
                               </div>
-                              {r.esSospechoso && <div className="text-[9px] text-rose-400 font-medium bg-rose-950/20 p-2 rounded border border-rose-900/30">⚠️ {r.razonSospecha}</div>}
+                              
+                              {/* Estado del Escaneo Individual */}
+                              {r.statusIA === 'escaneando' ? (
+                                  <div className="text-[10px] text-sky-400 flex items-center justify-center gap-2 py-2 bg-sky-950/20 rounded border border-sky-900/30"><Loader2 size={12} className="animate-spin"/> Analizando...</div>
+                              ) : r.statusIA === 'error' ? (
+                                   <div className="text-[10px] text-rose-400 flex items-center justify-center gap-2 py-2 bg-rose-950/20 rounded border border-rose-900/30"><AlertTriangle size={12}/> Error al leer</div>
+                              ) : (
+                                  <>
+                                      {r.esSospechoso && <div className="text-[9px] text-rose-400 font-medium bg-rose-950/20 p-2 rounded border border-rose-900/30">⚠️ {r.razonSospecha}</div>}
+                                      {r.statusIA === 'pendiente' ? (
+                                          <button onClick={() => scanReceiptIA(r)} className="w-full py-2 bg-sky-600/20 hover:bg-sky-600/30 text-sky-400 border border-sky-500/30 text-[10px] font-bold uppercase rounded transition-all flex items-center justify-center gap-2"><Sparkles size={12}/> Analizar Comprobante</button>
+                                      ) : null}
+                                  </>
+                              )}
+                              
                               <button onClick={() => openManualVerify(r)} className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-[10px] font-bold uppercase rounded border border-zinc-700 transition-all flex items-center justify-center gap-2"><Check size={12}/> Validar Manualmente</button>
                           </div>
                       ))}
                   </div>
               ) : (
-                /* VISTA NORMAL DE MATCHES */
                 displayedMatches.map((m, i) => (
                     <div key={i} className={`flex items-stretch rounded-xl border transition-all text-sm h-auto min-h-[5rem] shadow-lg relative overflow-hidden group 
                         ${m.status === 'verified' ? 'bg-zinc-900/30 border-emerald-900/30 opacity-60' 
@@ -815,7 +900,7 @@ export default function App() {
                                                 <span className="block text-[8px] font-bold text-zinc-600 uppercase mb-0.5">ATLETA</span>
                                                 <span className="font-bold text-zinc-200 text-xs md:text-sm leading-tight flex items-center gap-2">{r.nombre}</span>
                                             </div>
-                                            {r.fotoUrl && <button onClick={() => setSelectedImage(r.fotoUrl)} className={`text-[9px] px-2 py-1 rounded border flex items-center gap-1 uppercase font-bold tracking-wider ${isFilePdf(r.fotoUrl) ? 'bg-rose-900/20 text-rose-400 border-rose-500/20' : 'bg-zinc-800 text-zinc-400 border-zinc-700'}`}>{isFilePdf(r.fotoUrl) ? <FileIcon size={10}/> : <Eye size={10}/>} {isFilePdf(r.fotoUrl) ? 'PDF' : 'VER'}</button>}
+                                            {r.fotoUrl && <button onClick={() => openViewer(r.fotoUrl || "")} className={`text-[9px] px-2 py-1 rounded border flex items-center gap-1 uppercase font-bold tracking-wider ${isFilePdf(r.fotoUrl) ? 'bg-rose-900/20 text-rose-400 border-rose-500/20' : 'bg-zinc-800 text-zinc-400 border-zinc-700'}`}>{isFilePdf(r.fotoUrl) ? <FileIcon size={10}/> : <Eye size={10}/>} {isFilePdf(r.fotoUrl) ? 'PDF' : 'VER'}</button>}
                                         </div>
                                         {m.status === 'ocr_triangulation' && <div className="grid grid-cols-2 gap-2 text-[9px] bg-zinc-950/50 p-1.5 rounded border border-violet-500/20 mt-1"><div className="text-zinc-400">OCR Nombre: <span className="text-violet-300 font-bold">{r.nombreExtraido}</span></div><div className="text-zinc-400">OCR Monto: <span className="text-violet-300 font-bold">${r.montoExtraido}</span></div></div>}
                                         {m.status !== 'ocr_triangulation' && <div className="grid grid-cols-4 gap-2 text-[9px] md:text-[10px] text-zinc-500 bg-zinc-900/50 p-1.5 rounded border border-zinc-800/30"><div><span className="block font-bold text-zinc-600 text-[8px] uppercase tracking-wider">Cédula</span><span className="font-mono text-zinc-300">{r.cedula}</span></div><div><span className="block font-bold text-zinc-600 text-[8px] uppercase tracking-wider">Edad</span><span className="font-mono text-zinc-300">{r.edad}</span></div><div><span className="block font-bold text-zinc-600 text-[8px] uppercase tracking-wider">Valor</span><span className={`font-mono font-bold ${r.valorEsperado < 30 ? 'text-emerald-400' : 'text-zinc-300'}`}>${r.valorEsperado.toFixed(2)}</span></div>{r.docExtraido && <div><span className={`block font-bold text-[8px] uppercase tracking-wider ${m.matchType === 'documento' ? 'text-emerald-500' : 'text-rose-500'}`}>OCR</span><span className={`font-mono font-bold ${m.matchType === 'documento' ? 'text-emerald-200' : 'text-rose-300 line-through'}`}>{r.docExtraido}</span></div>}</div>}
@@ -834,24 +919,24 @@ export default function App() {
            </div>
         </div>
 
-        {selectedImage && (
-            <div className="fixed inset-0 z-[99999] bg-zinc-950/95 flex flex-col items-center justify-center p-8 backdrop-blur-md" onClick={() => setSelectedImage(null)}>
+        {viewerUrl && (
+            <div className="fixed inset-0 z-[99999] bg-zinc-950/95 flex flex-col items-center justify-center p-8 backdrop-blur-md" onClick={closeViewer}>
                 <div className="relative w-full h-full max-w-5xl max-h-[90vh] flex flex-col bg-zinc-900 border border-zinc-700 rounded-lg overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
                     <div className="h-10 bg-zinc-800 flex justify-between items-center px-4 border-b border-zinc-700 shrink-0">
                         <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
-                           {isFilePdf(selectedImage) ? <FileIcon size={14}/> : <ImageIcon size={14}/>} 
-                           {isFilePdf(selectedImage) ? 'VISOR PDF' : 'VISOR IMAGEN'}
+                           {viewerType === 'pdf' ? <FileIcon size={14}/> : <ImageIcon size={14}/>} 
+                           {viewerType === 'pdf' ? 'VISOR PDF (Documento Completo)' : 'VISOR IMAGEN'}
                         </span>
                         <div className="flex gap-2">
-                            <button onClick={() => window.open(selectedImage, '_blank')} className="text-xs bg-sky-600 hover:bg-sky-500 text-white px-3 py-1 rounded flex items-center gap-1 font-bold"><ExternalLink size={12}/> ABRIR ORIGINAL</button>
-                            <button onClick={() => setSelectedImage(null)} className="text-zinc-400 hover:text-white"><XCircle size={18}/></button>
+                            <button onClick={() => window.open(viewerUrl, '_blank')} className="text-xs bg-sky-600 hover:bg-sky-500 text-white px-3 py-1 rounded flex items-center gap-1 font-bold"><ExternalLink size={12}/> ABRIR ORIGINAL</button>
+                            <button onClick={closeViewer} className="text-zinc-400 hover:text-white"><XCircle size={18}/></button>
                         </div>
                     </div>
                     <div className="flex-1 bg-zinc-950 relative overflow-hidden flex items-center justify-center">
-                        {isFilePdf(selectedImage) ? (
-                            <iframe src={selectedImage} className="w-full h-full border-0" title="PDF Viewer"></iframe>
+                        {viewerType === 'pdf' ? (
+                            <iframe src={viewerUrl} className="w-full h-full border-0" title="PDF Viewer"></iframe>
                         ) : (
-                            <img src={selectedImage} className="max-w-full max-h-full object-contain" referrerPolicy="no-referrer" alt="Comprobante" />
+                            <img src={viewerUrl} className="max-w-full max-h-full object-contain" alt="Comprobante" />
                         )}
                     </div>
                 </div>
