@@ -20,7 +20,8 @@ import {
   Trophy,
   HelpCircle,
   RefreshCcw,
-  Search, // Nuevo icono importado
+  Search,
+  ArrowRight
 } from "lucide-react";
 
 // --- Interfaces ---
@@ -42,18 +43,22 @@ interface Category {
   desc: string;
 }
 
-// --- Componente: Modal de Alertas ---
+// --- Componente: Modal de Alertas (MEJORADO CON REDIRECCIÓN) ---
 const CustomModal = ({
   isOpen,
   title,
   message,
   type = "error",
+  actionLabel,
+  onAction,
   onClose,
 }: {
   isOpen: boolean;
   title: string;
   message: string;
   type?: "success" | "error" | "warning";
+  actionLabel?: string;
+  onAction?: () => void;
   onClose: () => void;
 }) => {
   if (!isOpen) return null;
@@ -85,12 +90,23 @@ const CustomModal = ({
             {title}
           </h3>
           <p className="text-gray-300 text-lg leading-relaxed font-barlow">{message}</p>
-          <button
-            onClick={onClose}
-            className="w-full py-4 mt-2 bg-white text-black font-bold text-lg md:text-xl rounded-xl hover:bg-gray-200 transition font-barlow"
-          >
-            Entendido
-          </button>
+          
+          <div className="flex flex-col w-full gap-3 mt-2">
+            {actionLabel && onAction && (
+              <button
+                onClick={onAction}
+                className="w-full py-4 bg-[#9B5CFF] hover:bg-[#8344e3] text-white font-bold text-lg md:text-xl rounded-xl transition font-barlow flex items-center justify-center gap-2 shadow-lg shadow-[#9B5CFF]/20"
+              >
+                {actionLabel} <ArrowRight size={20}/>
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className={`w-full py-4 font-bold text-lg md:text-xl rounded-xl transition font-barlow ${actionLabel ? 'bg-[#1A1E29] text-gray-400 hover:text-white hover:bg-[#252A36]' : 'bg-white text-black hover:bg-gray-200'}`}
+            >
+              {actionLabel ? 'Cerrar' : 'Entendido'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -165,9 +181,15 @@ export default function InscripcionPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   
   // Modals & Links
-  const [modalState, setModalState] = useState({ isOpen: false, title: "", message: "", type: "error" as "error" | "success" | "warning" });
+  const [modalState, setModalState] = useState({ 
+    isOpen: false, 
+    title: "", 
+    message: "", 
+    type: "error" as "error" | "success" | "warning",
+    actionLabel: undefined as string | undefined,
+    onAction: undefined as (() => void) | undefined
+  });
   const [discountModalOpen, setDiscountModalOpen] = useState(false);
-  // const [whatsLink, setWhatsLink] = useState<string>(""); // Ya no es estrictamente necesario para el botón principal, pero lo dejo por si acaso.
   
   // Selección
   const [pendingCategory, setPendingCategory] = useState<Category | null>(null);
@@ -206,7 +228,6 @@ export default function InscripcionPage() {
     setSelectedPrice(0);
     setPreviewName("");
     setUploadedFileUrl("");
-    // setWhatsLink("");
     setAcceptTerms(false);
     setErrors({});
     
@@ -249,8 +270,8 @@ export default function InscripcionPage() {
 
   // --- Lógica del Formulario ---
 
-  const showAlert = (title: string, message: string, type: "error" | "warning" | "success" = "error") => {
-    setModalState({ isOpen: true, title, message, type });
+  const showAlert = (title: string, message: string, type: "error" | "warning" | "success" = "error", actionLabel?: string, onAction?: () => void) => {
+    setModalState({ isOpen: true, title, message, type, actionLabel, onAction });
   };
 
   const handleCategoryClick = (cat: Category) => {
@@ -319,6 +340,7 @@ export default function InscripcionPage() {
     return isValid;
   };
 
+  // --- BLOQUEO INTELIGENTE (LA LÓGICA DE REDDIT) ---
   const checkUserExists = async () => {
     if (!formData.cedula || formData.cedula.length < 6) return false;
     setVerifying(true);
@@ -329,14 +351,19 @@ export default function InscripcionPage() {
       );
       const json = await res.json();
       setVerifying(false);
+      
       if (json && json.exists) {
         const nombreExistente = json.datos?.nombre || "Usuario";
+        // AQUÍ ESTA LA LÓGICA CLAVE:
+        // No solo bloqueamos, ofrecemos la solución inmediata.
         showAlert(
           "⛔ YA REGISTRADO",
-          `La cédula ${formData.cedula} (${nombreExistente}) ya tiene una inscripción activa.`,
-          "error"
+          `La cédula ${formData.cedula} (${nombreExistente}) ya tiene una inscripción activa. Si tuviste un problema con tu pago o necesitas corregirlo, no te inscribas de nuevo.`,
+          "error",
+          "Corregir mi Pago", // Texto del Botón
+          () => window.location.href = '/verificar' // Acción: Llevar a la página de auto-reparación
         );
-        return true;
+        return true; 
       }
       return false; 
     } catch (e) {
@@ -391,16 +418,13 @@ export default function InscripcionPage() {
       setLoading(false);
 
       if (!res.ok || !json || json.status !== "success") {
-        showAlert("Error", "No se pudo guardar la inscripción. Intenta de nuevo.");
+        showAlert("Error", json?.message || "No se pudo guardar la inscripción. Intenta de nuevo.");
         setSubmitting(false);
         return;
       }
 
       if (json?.file_url) setUploadedFileUrl(String(json.file_url));
       setStep(4);
-
-      // const msg = `...`; // Ya no generamos el link de WhatsApp automáticamente para el usuario aquí
-      // setWhatsLink(`...`); 
 
     } catch (err) {
       setLoading(false);
@@ -457,6 +481,8 @@ export default function InscripcionPage() {
         title={modalState.title} 
         message={modalState.message} 
         type={modalState.type} 
+        actionLabel={modalState.actionLabel}
+        onAction={modalState.onAction}
         onClose={() => setModalState({ ...modalState, isOpen: false })} 
       />
       <DiscountModal 
@@ -634,6 +660,8 @@ export default function InscripcionPage() {
                         return;
                       }
                       if (validateStep2()) {
+                        // VERIFICACIÓN ESTRICTA:
+                        // Si "exists" es TRUE, el modal se muestra en checkUserExists y NO avanzamos.
                         const exists = await checkUserExists();
                         if (!exists) setStep(3);
                       }

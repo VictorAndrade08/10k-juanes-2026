@@ -11,11 +11,13 @@ import {
   Fingerprint, Zap, Info, CreditCard, Share2, XCircle, AlertOctagon, Hash, Calendar,
   Maximize2, Database, Image as ImageIcon, User, Wallet, FileWarning, Unlock, LogOut,
   Users, Accessibility, LayoutDashboard, ChevronRight, Check, Landmark, Tag, CheckCircle, 
-  FileText as FileIcon, // RENOMBRADO PARA EVITAR CONFLICTOS
+  FileText as FileIcon,
   ThumbsUp, Eraser, Users2, Contact, BadgeAlert, ArrowLeftRight, FileSearch, CheckCheck, Play, 
   Zap as ZapFast, FileX, Scale, HelpCircle, EyeOff, BrainCircuit, GripHorizontal, ScanEye, 
   Layers, Ghost, ListFilter, ExternalLink, Sparkles, Menu, ClipboardPaste, X, Siren,
-  TrendingUp, DollarSign
+  TrendingUp, DollarSign,
+  // --- ICONOS NUEVOS PARA GESTIÓN ---
+  MessageCircle, Trash2
 } from 'lucide-react';
 
 // --- CONFIGURACIÓN FIREBASE ROBUSTA ---
@@ -118,6 +120,7 @@ interface Record {
   id: string;
   nombre: string;
   cedula: string;
+  telefono?: string; // NUEVO: Para contacto
   edad: number;
   categoria: string;
   tieneDiscapacidad: boolean;
@@ -425,6 +428,7 @@ export default function App() {
           id: r.id,
           nombre: r.fields['nombre'] || 'DESCONOCIDO',
           cedula: r.fields['cedula'] || 'S/N',
+          telefono: r.fields['telefono'] || r.fields['celular'] || r.fields['mobile'] || r.fields['whatsapp'] || '', 
           edad: r.fields['edad'] || 0,
           categoria: r.fields['categorias'] || 'N/A',
           tieneDiscapacidad: r.fields['Discapacidad'] === true,
@@ -568,10 +572,10 @@ export default function App() {
                 const montoVal = parseFloat(montoMatch[1].replace(',', '.'));
                 const looksLikeDate = docNum.startsWith('202') && docNum.length === 8;
                 if (!looksLikeDate && montoVal > 0) {
-                     let desc = line.replace(docNum, '').replace(montoMatch[1], '').trim();
-                     desc = desc.replace(/^[\s\t\d-]+/, '').substring(0, 100); 
-                     const isInter = /SPI|BCE|OTROS|INTERB/i.test(line);
-                     bankEntries.push({ documento: docNum, monto: montoVal, depositor: desc || "SIN DESCRIPCION", esInterbancaria: isInter, esDuplicadoBanco: false });
+                      let desc = line.replace(docNum, '').replace(montoMatch[1], '').trim();
+                      desc = desc.replace(/^[\s\t\d-]+/, '').substring(0, 100); 
+                      const isInter = /SPI|BCE|OTROS|INTERB/i.test(line);
+                      bankEntries.push({ documento: docNum, monto: montoVal, depositor: desc || "SIN DESCRIPCION", esInterbancaria: isInter, esDuplicadoBanco: false });
                 }
             }
         });
@@ -720,6 +724,47 @@ export default function App() {
       showStatus('success', 'Pago validado.'); setVerifyModalOpen(false);
     } catch (e) { showStatus('error', 'Error manual.'); } finally { setLoading(false); }
   };
+  
+  // --- NUEVO: GESTIÓN DE ERRORES Y CONTACTO (RECHAZAR MANTIENE LA LÍNEA) ---
+  const sendWhatsAppMessage = (record: Record, type: 'missing_payment' | 'error_data') => {
+    if (!record.telefono) return showStatus('error', 'No hay teléfono registrado para este atleta.');
+    
+    let msg = '';
+    if (type === 'missing_payment') {
+      msg = `Hola ${record.nombre}, te saludamos de la 10K Ruta de los Tres Juanes. Vemos tu registro pero no encontramos tu comprobante de pago o fue rechazado. Por favor, ayúdanos enviando la foto del pago por este medio para validar tu inscripción.`;
+    } else {
+      msg = `Hola ${record.nombre}, hubo un error con los datos de tu inscripción en la 10K Ruta de los Tres Juanes. Por favor necesitamos verificar tu información para que no pierdas tu cupo.`;
+    }
+    
+    // Limpieza básica del número (Ecuador)
+    let phone = record.telefono.replace(/\D/g, '');
+    if (phone.startsWith('09')) phone = '593' + phone.substring(1);
+    
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank');
+  };
+
+  const rejectAndFreeSpot = async (record: Record) => {
+    if (!confirm(`¿LIBERAR CÉDULA de ${record.nombre}?\n\nEsto cambiará su estado a "Rechazado" en Airtable (MISMA LÍNEA) para que pueda volver a inscribirse o corregir datos.`)) return;
+    
+    setLoading(true);
+    try {
+      // AQUÍ ESTÁ LA CLAVE: Usamos PATCH al ID existente. No creamos nada nuevo.
+      await fetch(`https://api.airtable.com/v0/${config.baseId}/${encodeURIComponent(config.tableName)}/${record.id}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { 'Etapa': 'Rechazado', 'Comentarios': `⛔ LIBERADO MANUALMENTE [${new Date().toLocaleDateString()}] - Para re-inscripción` } })
+      });
+      
+      // Lo sacamos de la lista actual visualmente
+      setAirtableRecords(prev => prev.filter(r => r.id !== record.id));
+      showStatus('success', 'Cédula liberada. Estado cambiado a Rechazado en la misma línea.');
+    } catch (e) {
+      showStatus('error', 'Error al liberar registro.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredRecords = useMemo(() => airtableRecords.filter(r => r.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || r.cedula.includes(searchTerm)), [airtableRecords, searchTerm]);
   const perfectMatchesCount = matches.filter(m => m.status === 'found' && m.paymentStatus !== 'underpaid').length;
@@ -789,7 +834,10 @@ export default function App() {
                       <div className="flex items-center gap-1">
                           {r.fotoUrl && <button onClick={() => openViewer(r.fotoUrl || "")} className={`w-7 h-7 flex items-center justify-center rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white border border-zinc-700 ${isFilePdf(r.fotoUrl) ? 'text-rose-400' : ''}`}>{isFilePdf(r.fotoUrl) ? <FileIcon size={12}/> : <ImageIcon size={12}/>}</button>}
                           <button onClick={() => scanReceiptIA(r)} disabled={scanningId === r.id} className="w-7 h-7 flex items-center justify-center rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-sky-400 border border-zinc-700">{scanningId === r.id ? <Loader2 size={12} className="animate-spin"/> : <Sparkles size={12}/>}</button>
-                          <button onClick={() => openManualVerify(r)} className="w-7 h-7 flex items-center justify-center rounded bg-zinc-800 hover:bg-emerald-600 text-zinc-400 hover:text-white border border-transparent hover:border-emerald-500/50"><Check size={12}/></button>
+                          
+                          {/* NUEVO: BOTONES DE GESTIÓN RÁPIDA */}
+                          <button onClick={() => sendWhatsAppMessage(r, 'missing_payment')} className="w-7 h-7 flex items-center justify-center rounded bg-zinc-800 hover:bg-green-600 text-zinc-400 hover:text-white border border-transparent hover:border-green-500/50 transition-all" title="Pedir pago por WhatsApp"><MessageCircle size={12}/></button>
+                          <button onClick={() => rejectAndFreeSpot(r)} className="w-7 h-7 flex items-center justify-center rounded bg-zinc-800 hover:bg-red-600 text-zinc-400 hover:text-white border border-transparent hover:border-red-500/50 transition-all" title="Liberar Cédula (Permitir re-inscripción en misma línea)"><Trash2 size={12}/></button>
                       </div>
                    </div>
                    {r.docExtraido && <div className="mt-1 pt-1.5 border-t border-zinc-800/50 flex flex-col gap-0.5"><div className="flex justify-between items-center"><span className="text-[9px] text-zinc-500 uppercase font-bold tracking-wider">DOC DETECTADO</span><span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950/30 px-1.5 rounded">{r.docExtraido}</span></div></div>}
@@ -895,15 +943,15 @@ export default function App() {
                             <div className="flex flex-col gap-2 w-full">
                                 {m.records.map((r, idx) => (
                                     <div key={idx} className={`p-2 rounded-lg border flex flex-col gap-1.5 relative overflow-hidden ${m.status === 'ocr_triangulation' ? 'bg-zinc-950/60 border-violet-500/30' : 'bg-zinc-950/40 border-zinc-800/50'}`}>
-                                        <div className="flex justify-between items-center pr-4">
-                                            <div className="flex flex-col">
-                                                <span className="block text-[8px] font-bold text-zinc-600 uppercase mb-0.5">ATLETA</span>
-                                                <span className="font-bold text-zinc-200 text-xs md:text-sm leading-tight flex items-center gap-2">{r.nombre}</span>
+                                            <div className="flex justify-between items-center pr-4">
+                                                <div className="flex flex-col">
+                                                    <span className="block text-[8px] font-bold text-zinc-600 uppercase mb-0.5">ATLETA</span>
+                                                    <span className="font-bold text-zinc-200 text-xs md:text-sm leading-tight flex items-center gap-2">{r.nombre}</span>
+                                                </div>
+                                                {r.fotoUrl && <button onClick={() => openViewer(r.fotoUrl || "")} className={`text-[9px] px-2 py-1 rounded border flex items-center gap-1 uppercase font-bold tracking-wider ${isFilePdf(r.fotoUrl) ? 'bg-rose-900/20 text-rose-400 border-rose-500/20' : 'bg-zinc-800 text-zinc-400 border-zinc-700'}`}>{isFilePdf(r.fotoUrl) ? <FileIcon size={10}/> : <Eye size={10}/>} {isFilePdf(r.fotoUrl) ? 'PDF' : 'VER'}</button>}
                                             </div>
-                                            {r.fotoUrl && <button onClick={() => openViewer(r.fotoUrl || "")} className={`text-[9px] px-2 py-1 rounded border flex items-center gap-1 uppercase font-bold tracking-wider ${isFilePdf(r.fotoUrl) ? 'bg-rose-900/20 text-rose-400 border-rose-500/20' : 'bg-zinc-800 text-zinc-400 border-zinc-700'}`}>{isFilePdf(r.fotoUrl) ? <FileIcon size={10}/> : <Eye size={10}/>} {isFilePdf(r.fotoUrl) ? 'PDF' : 'VER'}</button>}
-                                        </div>
-                                        {m.status === 'ocr_triangulation' && <div className="grid grid-cols-2 gap-2 text-[9px] bg-zinc-950/50 p-1.5 rounded border border-violet-500/20 mt-1"><div className="text-zinc-400">OCR Nombre: <span className="text-violet-300 font-bold">{r.nombreExtraido}</span></div><div className="text-zinc-400">OCR Monto: <span className="text-violet-300 font-bold">${r.montoExtraido}</span></div></div>}
-                                        {m.status !== 'ocr_triangulation' && <div className="grid grid-cols-4 gap-2 text-[9px] md:text-[10px] text-zinc-500 bg-zinc-900/50 p-1.5 rounded border border-zinc-800/30"><div><span className="block font-bold text-zinc-600 text-[8px] uppercase tracking-wider">Cédula</span><span className="font-mono text-zinc-300">{r.cedula}</span></div><div><span className="block font-bold text-zinc-600 text-[8px] uppercase tracking-wider">Edad</span><span className="font-mono text-zinc-300">{r.edad}</span></div><div><span className="block font-bold text-zinc-600 text-[8px] uppercase tracking-wider">Valor</span><span className={`font-mono font-bold ${r.valorEsperado < 30 ? 'text-emerald-400' : 'text-zinc-300'}`}>${r.valorEsperado.toFixed(2)}</span></div>{r.docExtraido && <div><span className={`block font-bold text-[8px] uppercase tracking-wider ${m.matchType === 'documento' ? 'text-emerald-500' : 'text-rose-500'}`}>OCR</span><span className={`font-mono font-bold ${m.matchType === 'documento' ? 'text-emerald-200' : 'text-rose-300 line-through'}`}>{r.docExtraido}</span></div>}</div>}
+                                            {m.status === 'ocr_triangulation' && <div className="grid grid-cols-2 gap-2 text-[9px] bg-zinc-950/50 p-1.5 rounded border border-violet-500/20 mt-1"><div className="text-zinc-400">OCR Nombre: <span className="text-violet-300 font-bold">{r.nombreExtraido}</span></div><div className="text-zinc-400">OCR Monto: <span className="text-violet-300 font-bold">${r.montoExtraido}</span></div></div>}
+                                            {m.status !== 'ocr_triangulation' && <div className="grid grid-cols-4 gap-2 text-[9px] md:text-[10px] text-zinc-500 bg-zinc-900/50 p-1.5 rounded border border-zinc-800/30"><div><span className="block font-bold text-zinc-600 text-[8px] uppercase tracking-wider">Cédula</span><span className="font-mono text-zinc-300">{r.cedula}</span></div><div><span className="block font-bold text-zinc-600 text-[8px] uppercase tracking-wider">Edad</span><span className="font-mono text-zinc-300">{r.edad}</span></div><div><span className="block font-bold text-zinc-600 text-[8px] uppercase tracking-wider">Valor</span><span className={`font-mono font-bold ${r.valorEsperado < 30 ? 'text-emerald-400' : 'text-zinc-300'}`}>${r.valorEsperado.toFixed(2)}</span></div>{r.docExtraido && <div><span className={`block font-bold text-[8px] uppercase tracking-wider ${m.matchType === 'documento' ? 'text-emerald-500' : 'text-rose-500'}`}>OCR</span><span className={`font-mono font-bold ${m.matchType === 'documento' ? 'text-emerald-200' : 'text-rose-300 line-through'}`}>{r.docExtraido}</span></div>}</div>}
                                     </div>
                                 ))}
                             </div>
