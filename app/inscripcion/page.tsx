@@ -13,7 +13,7 @@ export default function InscripcionPage() {
   useEffect(() => {
     setMounted(true);
     // FECHA LÍMITE: Hoy 3 de Febrero 2026 a las 6:00 PM (18:00:00)
-    const targetDate = new Date("2026-02-03T18:00:00").getTime();
+    const targetDate = new Date("2026-02-03T21:00:00").getTime();
 
     const updateTimer = () => {
       const now = new Date().getTime();
