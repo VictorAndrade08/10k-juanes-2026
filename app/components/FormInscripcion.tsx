@@ -21,10 +21,12 @@ import {
   HelpCircle,
   RefreshCcw,
   Search,
-  ArrowRight
+  ArrowRight,
+  ShieldCheck, // Icono agregado para la seguridad
+  FileText     // Icono agregado para el comprobante
 } from "lucide-react";
 
-// --- Interfaces ---
+// --- Interfaces Actualizadas ---
 interface FormDataState {
   cedula: string;
   nombres: string;
@@ -34,6 +36,11 @@ interface FormDataState {
   telefono: string;
   edad: string;
   genero: string;
+  // --- NUEVOS CAMPOS PARA VERIFICACIÓN FÁCIL (Anti-Fraude) ---
+  es_titular: string; // "si" o "no"
+  nombre_titular_cuenta: string; // Nombre de quien pagó realmente
+  num_comprobante: string; // El ID de la transacción
+  fecha_pago: string;
   comprobante: File | null;
 }
 
@@ -43,7 +50,7 @@ interface Category {
   desc: string;
 }
 
-// --- Componente: Modal de Alertas (MEJORADO CON REDIRECCIÓN) ---
+// --- Componente: Modal de Alertas ---
 const CustomModal = ({
   isOpen,
   title,
@@ -205,7 +212,7 @@ export default function InscripcionPage() {
   const [acceptTerms, setAcceptTerms] = useState(false);
   const didMount = useRef(false);
 
-  // Form Data Inicial
+  // Form Data Inicial (Agregamos los campos por defecto)
   const initialFormData: FormDataState = {
     cedula: "",
     nombres: "",
@@ -215,6 +222,11 @@ export default function InscripcionPage() {
     telefono: "",
     edad: "",
     genero: "",
+    // Nuevos campos
+    es_titular: "si", 
+    nombre_titular_cuenta: "",
+    num_comprobante: "",
+    fecha_pago: "",
     comprobante: null,
   };
 
@@ -230,8 +242,6 @@ export default function InscripcionPage() {
     setUploadedFileUrl("");
     setAcceptTerms(false);
     setErrors({});
-    
-    // Scroll al inicio
     if (componentRef.current) {
         componentRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
     }
@@ -297,6 +307,18 @@ export default function InscripcionPage() {
   const handleInput = useCallback(
     (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
       const { name, value } = e.target;
+      
+      // Lógica para el titular de la cuenta
+      if (name === "es_titular") {
+        setFormData(prev => ({
+            ...prev, 
+            es_titular: value,
+            // Si dice que SI es titular, prellenamos con su nombre y apellido
+            nombre_titular_cuenta: value === "si" ? `${prev.nombres} ${prev.apellidos}` : "" 
+        }));
+        return;
+      }
+
       const files = (e.target as HTMLInputElement).files;
 
       if (errors[name]) {
@@ -315,7 +337,7 @@ export default function InscripcionPage() {
       }
       setFormData((f) => ({ ...f, [name]: value }));
     },
-    [errors]
+    [errors, formData.nombres, formData.apellidos]
   );
 
   const clearFile = useCallback(() => {
@@ -340,7 +362,36 @@ export default function InscripcionPage() {
     return isValid;
   };
 
-  // --- BLOQUEO INTELIGENTE (LA LÓGICA DE REDDIT) ---
+  // Validaciones del Paso 3 (Anti-Fraude)
+  const validateStep3 = () => {
+    const newErrors: Record<string, string> = {};
+    let isValid = true;
+    
+    // Validar Número de comprobante (Fundamental para evitar mirar la foto)
+    if (!formData.num_comprobante || formData.num_comprobante.length < 4) {
+        newErrors["num_comprobante"] = "Ingresa al menos los últimos 4 dígitos.";
+        isValid = false;
+    }
+    // Validar fecha
+    if (!formData.fecha_pago) {
+        newErrors["fecha_pago"] = "La fecha es obligatoria.";
+        isValid = false;
+    }
+    // Validar nombre del titular si seleccionó "No es mía"
+    if (formData.es_titular === "no" && (!formData.nombre_titular_cuenta || formData.nombre_titular_cuenta.length < 3)) {
+        newErrors["nombre_titular_cuenta"] = "Si no es tu cuenta, necesitamos el nombre del dueño para encontrar el pago.";
+        isValid = false;
+    }
+    // Validar foto
+    if (!formData.comprobante) {
+        showAlert("Falta Comprobante", "Debes subir la foto o PDF del pago.");
+        isValid = false;
+    }
+
+    setErrors(newErrors);
+    return isValid;
+  }
+
   const checkUserExists = async () => {
     if (!formData.cedula || formData.cedula.length < 6) return false;
     setVerifying(true);
@@ -354,14 +405,12 @@ export default function InscripcionPage() {
       
       if (json && json.exists) {
         const nombreExistente = json.datos?.nombre || "Usuario";
-        // AQUÍ ESTA LA LÓGICA CLAVE:
-        // No solo bloqueamos, ofrecemos la solución inmediata.
         showAlert(
           "⛔ YA REGISTRADO",
-          `La cédula ${formData.cedula} (${nombreExistente}) ya tiene una inscripción activa. Si tuviste un problema con tu pago o necesitas corregirlo, no te inscribas de nuevo.`,
+          `La cédula ${formData.cedula} (${nombreExistente}) ya tiene una inscripción activa.`,
           "error",
-          "Corregir mi Pago", // Texto del Botón
-          () => window.location.href = '/verificar' // Acción: Llevar a la página de auto-reparación
+          "Corregir mi Pago",
+          () => window.location.href = '/verificar'
         );
         return true; 
       }
@@ -381,14 +430,11 @@ export default function InscripcionPage() {
 
   const submitForm = async () => {
     if (submitting) return;
+    
+    // AGREGAMOS VALIDACIÓN DEL PASO 3 ANTES DE ENVIAR
+    if (!validateStep3()) return;
+
     setSubmitting(true);
-
-    if (!selectedCategory || !formData.comprobante) {
-      showAlert("Datos incompletos", "Falta categoría o comprobante.");
-      setSubmitting(false);
-      return;
-    }
-
     setLoading(true);
 
     const body = new FormData();
@@ -435,7 +481,7 @@ export default function InscripcionPage() {
 
   const stepsLabels = ["Categoría", "Datos", "Pago", "Final"];
 
-  const renderInputField = (name: keyof FormDataState, label: string, icon: React.ReactNode, type: string = "text", onBlur?: () => void) => (
+  const renderInputField = (name: keyof FormDataState, label: string, icon: React.ReactNode, type: string = "text", placeholder: string = "", onBlur?: () => void) => (
     <div className="relative group">
       <label className="text-sm md:text-base font-bold text-gray-300 uppercase tracking-wide mb-2 flex items-center gap-2 font-barlow">
         {icon} {label}
@@ -446,7 +492,7 @@ export default function InscripcionPage() {
         value={formData[name] ? String(formData[name]) : ""}
         onChange={handleInput}
         onBlur={onBlur}
-        placeholder={`Ingresa tu ${label.toLowerCase()}...`}
+        placeholder={placeholder || `Ingresa tu ${label.toLowerCase()}...`}
         className={`
           w-full bg-[#0F1218] border rounded-xl 
           px-5 py-4 
@@ -494,10 +540,9 @@ export default function InscripcionPage() {
       {/* Contenedor Principal */}
       <div ref={componentRef} className="w-full max-w-7xl mx-auto bg-[#1C2029]/80 backdrop-blur-xl rounded-[24px] md:rounded-[32px] border border-white/5 shadow-2xl overflow-hidden flex flex-col md:flex-row">
         
-        {/* --- SIDEBAR / HEADER (Responsivo) --- */}
+        {/* --- SIDEBAR / HEADER --- */}
         <div className="bg-[#11141A] p-6 md:p-12 md:w-1/3 flex flex-col justify-between border-b md:border-b-0 md:border-r border-white/5 relative min-w-[300px]">
           <div>
-            {/* LOGO */}
             <div className="flex items-center gap-4 mb-6 md:mb-12">
                <div className="w-14 h-14 md:w-16 md:h-16 rounded-xl md:rounded-2xl bg-[#C02485] shadow-lg flex items-center justify-center shrink-0">
                  <img src="/white.svg" alt="Logo" className="w-8 h-8 md:w-10 md:h-10 object-contain" />
@@ -546,7 +591,6 @@ export default function InscripcionPage() {
         {/* --- ÁREA DE CONTENIDO --- */}
         <div className="p-5 md:p-14 md:w-2/3 bg-[#161A23] relative min-h-[500px]">
           
-          {/* Overlay de Carga */}
           {(loading || verifying) && (
             <div className="absolute inset-0 z-50 bg-[#161A23]/95 backdrop-blur-sm flex flex-col items-center justify-center gap-6 animate-in fade-in">
               <div className="w-16 h-16 border-4 border-[#9B5CFF] border-t-transparent rounded-full animate-spin" />
@@ -563,7 +607,7 @@ export default function InscripcionPage() {
               <div className="animate-in slide-in-from-bottom-4 duration-500 fade-in">
                 <h1 className="text-4xl md:text-6xl font-bold mb-4 font-bebas">Selecciona tu Categoría</h1>
                 <p className="text-gray-300 mb-6 md:mb-8 text-lg md:text-xl leading-relaxed font-barlow">
-                  Elige la categoría en la que vas a competir. El precio se ajustará automáticamente.
+                  Elige la categoría en la que vas a competir.
                 </p>
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-5 font-barlow">
@@ -595,16 +639,6 @@ export default function InscripcionPage() {
                     </button>
                   ))}
                 </div>
-
-                <div className="mt-8 bg-yellow-500/5 border border-yellow-500/20 rounded-2xl p-6 flex items-start gap-4">
-                  <div className="p-2 bg-yellow-500/10 rounded-full text-yellow-500 shrink-0"><Info size={28} /></div>
-                  <div className="font-barlow">
-                    <h4 className="text-yellow-500 font-bold uppercase text-sm md:text-base mb-2 tracking-wide">Nota Importante</h4>
-                    <p className="text-gray-200 leading-relaxed text-base md:text-lg">
-                      Solo participas en la categoría que escojas. El premio económico aplica únicamente para la categoría seleccionada.
-                    </p>
-                  </div>
-                </div>
               </div>
             )}
 
@@ -615,7 +649,7 @@ export default function InscripcionPage() {
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-8 mb-8">
                   <div className="md:col-span-2">
-                    {renderInputField("cedula", "Cédula o Pasaporte", <CreditCard size={20} />, "number", handleCedulaBlur)}
+                    {renderInputField("cedula", "Cédula o Pasaporte", <CreditCard size={20} />, "number", "", handleCedulaBlur)}
                   </div>
                   {renderInputField("nombres", "Nombres", <User size={20} />)}
                   {renderInputField("apellidos", "Apellidos", <User size={20} />)}
@@ -645,7 +679,7 @@ export default function InscripcionPage() {
                    <label className="flex items-start gap-4 cursor-pointer">
                     <input type="checkbox" checked={acceptTerms} onChange={(e) => setAcceptTerms(e.target.checked)} className="mt-1 w-6 h-6 accent-[#9B5CFF]" />
                     <span className="text-base md:text-lg text-gray-300 leading-relaxed font-barlow">
-                      Acepto los <a href="/terminos" target="_blank" className="text-[#9B5CFF] underline font-bold hover:text-[#FF4EC4]">Términos y Condiciones</a> y declaro estar apto físicamente para la competencia.
+                      Acepto los <a href="/terminos" target="_blank" className="text-[#9B5CFF] underline font-bold hover:text-[#FF4EC4]">Términos y Condiciones</a> y declaro estar apto físicamente.
                     </span>
                   </label>
                 </div>
@@ -660,8 +694,6 @@ export default function InscripcionPage() {
                         return;
                       }
                       if (validateStep2()) {
-                        // VERIFICACIÓN ESTRICTA:
-                        // Si "exists" es TRUE, el modal se muestra en checkUserExists y NO avanzamos.
                         const exists = await checkUserExists();
                         if (!exists) setStep(3);
                       }
@@ -674,10 +706,10 @@ export default function InscripcionPage() {
               </div>
             )}
 
-            {/* --- PASO 3: PAGO --- */}
+            {/* --- PASO 3: PAGO (MEJORADO: VERIFICACIÓN FÁCIL) --- */}
             {step === 3 && (
               <div className="animate-in slide-in-from-right-8 duration-500 fade-in">
-                <h1 className="text-4xl md:text-6xl font-bold mb-8 font-bebas">Realiza tu Pago</h1>
+                <h1 className="text-4xl md:text-6xl font-bold mb-8 font-bebas">Validación de Pago</h1>
                 
                 <div className="bg-gradient-to-br from-[#1A1E29] to-black border border-white/10 rounded-2xl p-6 md:p-10 mb-8 shadow-lg font-barlow">
                   <div className="flex items-center gap-5 mb-8 pb-6 border-b border-white/10">
@@ -712,8 +744,52 @@ export default function InscripcionPage() {
                   </div>
                 </div>
 
-                <div className="mb-10">
-                  <label className="text-base md:text-lg font-bold text-gray-300 mb-3 block uppercase tracking-wide font-barlow">Subir Comprobante (Foto/PDF)</label>
+                {/* --- SECCIÓN ANTI-FRAUDE Y VERIFICACIÓN --- */}
+                <div className="space-y-6 mb-10">
+                    <div className="flex items-center gap-2 mb-2 text-yellow-500">
+                        <ShieldCheck size={20}/>
+                        <h3 className="text-xl font-bold font-bebas tracking-wide uppercase">Datos para Verificación Rápida</h3>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                         {/* 1. Número de Comprobante (Evita tener que mirar la foto) */}
+                        <div className="md:col-span-1">
+                            {renderInputField("num_comprobante", "Núm. Comprobante (Últimos dígitos)", <FileText size={20}/>, "text", "Ej: 123456")}
+                            <p className="text-xs text-gray-500 mt-2 font-barlow ml-1">Escribe el número de documento de la transferencia. Esto nos permite buscarlo en el banco sin abrir la imagen.</p>
+                        </div>
+
+                         {/* 2. Fecha (Ayuda a filtrar) */}
+                        <div className="md:col-span-1">
+                            {renderInputField("fecha_pago", "Fecha de Transferencia", <Calendar size={20}/>, "date")}
+                        </div>
+
+                        {/* 3. Titular de la Cuenta (Evita confusión de nombres) */}
+                        <div className="md:col-span-2 bg-[#0F1218] p-5 rounded-xl border border-white/10">
+                            <label className="text-base font-bold text-gray-300 uppercase tracking-wide mb-3 block font-barlow">¿La cuenta bancaria es tuya?</label>
+                            <div className="flex gap-4 mb-4">
+                                <label className="flex items-center gap-2 cursor-pointer bg-white/5 px-4 py-2 rounded-lg border border-white/5 hover:border-[#9B5CFF] transition">
+                                    <input type="radio" name="es_titular" value="si" checked={formData.es_titular === "si"} onChange={handleInput} className="accent-[#9B5CFF] w-5 h-5"/>
+                                    <span className="font-barlow text-lg">Sí, es mía</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer bg-white/5 px-4 py-2 rounded-lg border border-white/5 hover:border-[#9B5CFF] transition">
+                                    <input type="radio" name="es_titular" value="no" checked={formData.es_titular === "no"} onChange={handleInput} className="accent-[#9B5CFF] w-5 h-5"/>
+                                    <span className="font-barlow text-lg">No, prestada/familiar</span>
+                                </label>
+                            </div>
+
+                            {/* Si NO es titular, pedimos el nombre real */}
+                            {formData.es_titular === "no" && (
+                                <div className="animate-in slide-in-from-top-2 fade-in">
+                                    {renderInputField("nombre_titular_cuenta", "Nombre del Dueño de la Cuenta", <User size={20}/>, "text", "Ej: Juan Pérez (Mi papá)")}
+                                    <p className="text-xs text-yellow-500 mt-2 font-barlow flex items-center gap-1"><Info size={12}/> Importante: Si no pones este nombre, no podremos encontrar tu pago en el banco.</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="mb-10 pt-6 border-t border-white/10">
+                  <label className="text-base md:text-lg font-bold text-gray-300 mb-3 block uppercase tracking-wide font-barlow">Adjuntar Comprobante (Foto/PDF)</label>
                   {!previewName ? (
                     <label className="flex flex-col items-center justify-center w-full h-32 md:h-48 border-2 border-dashed border-gray-600 rounded-2xl cursor-pointer hover:border-[#9B5CFF] hover:bg-[#9B5CFF]/5 transition-all bg-[#0F1218]">
                       <UploadCloud className="w-12 h-12 md:w-16 md:h-16 mb-2 text-gray-400" />
@@ -750,7 +826,7 @@ export default function InscripcionPage() {
                 </div>
                 <h1 className="text-4xl md:text-6xl font-bold mb-6 text-white font-bebas">¡Inscripción Exitosa!</h1>
                 <p className="text-gray-300 mb-10 px-4 text-lg md:text-2xl leading-relaxed max-w-2xl mx-auto font-barlow">
-                  Hemos recibido tus datos correctamente. Tu pago será validado en los siguientes <strong className="text-white">2 a 3 días laborales.</strong> Revisala en la pestaña de verificación.
+                  Hemos recibido tus datos correctamente. Tu pago será validado en los siguientes <strong className="text-white">2 a 3 días laborales.</strong>
                 </p>
 
                 {/* Resumen Completo */}
@@ -798,7 +874,6 @@ export default function InscripcionPage() {
 
                    <div className="flex items-center gap-5 bg-[#1A1E29] p-5 rounded-xl border border-white/5">
                      <div className="bg-white p-2 rounded-lg shrink-0">
-                        {/* Generador de QR real */}
                         <img 
                           alt="QR" 
                           src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(formData.cedula || "10K")}`} 
