@@ -128,7 +128,7 @@ export default function SponsorsStrip() {
         <div className="flex items-center justify-center gap-4 mb-6 sm:mb-8">
             <div className="h-px w-8 sm:w-16 bg-gradient-to-r from-transparent to-[#C02485]/50"></div>
             <p className="text-center text-[24px] sm:text-[32px] tracking-[0.1em] uppercase text-gray-800 font-[family-name:var(--font-bebas)]">
-              Nuestros <span className="text-[#C02485]">Patrocinadores</span>
+              Nuestros <span className="text-[#C02485]">Parners</span>
             </p>
             <div className="h-px w-8 sm:w-16 bg-gradient-to-l from-transparent to-[#C02485]/50"></div>
         </div>
